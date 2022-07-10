@@ -1,0 +1,1 @@
+const char* logl_root = "E:/ComputerGraphics/Code/OpenGLRayTracing";
