@@ -1,1 +1,1 @@
-const char* logl_root = "E:/ComputerGraphics/Code/OpenGLRayTracing";
+const char* logl_root = "E:/ComputerGraphics/Code/OpenGLRayTracing-master";
