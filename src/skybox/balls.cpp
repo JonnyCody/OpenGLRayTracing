@@ -24,7 +24,10 @@ unsigned int loadCubemap(std::vector<std::string> faces);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 800;
+const unsigned int SCR_HEIGHT = 600;
+const GLfloat PI = 3.14159265358979323846f;
+const int Y_SEGMENTS = 50;
+const int X_SEGMENTS = 50;
 
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 float lastX = SCR_WIDTH / 2.0f;
@@ -77,6 +80,8 @@ int main()
     // build and compile shaders
     Shader skyboxShader(FileSystem::getPath("src/skybox/skybox.vs").c_str(),
         FileSystem::getPath("src/skybox/skybox.fs").c_str());
+    Shader shader(FileSystem::getPath("src/skybox/balls.vs").c_str(),
+         FileSystem::getPath("src/skybox/balls.fs").c_str());
 
     float skyboxVertices[] = {
         // positions          
@@ -148,11 +153,73 @@ int main()
     // load textures
     // -------------
     unsigned int cubemapTexture = loadCubemap(faces);
+    unsigned int sphereTexture = loadTexture(FileSystem::getPath("resources/textures/earthmap.jpg").c_str());
 
     // shader configuration
     // --------------------
     skyboxShader.use();
     skyboxShader.setInt("skybox", 0);
+
+    shader.use();
+    shader.setInt("texture1", 0);
+
+    // produce sphere
+    // --------------
+    std::vector<float> sphereVertices;
+    std::vector<int> sphereIndices;
+
+    for(int y = 0; y <= Y_SEGMENTS; ++y)
+    {
+        for(int x = 0; x <= X_SEGMENTS; ++x)
+        {
+            float xSegment = (float)x / (float)X_SEGMENTS;
+            float ySegment = (float)y / (float)Y_SEGMENTS;
+            float xPos = std::cos(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
+            float yPos = std::cos(ySegment * PI);
+            float zPos = std::sin(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
+            sphereVertices.push_back(xPos);
+            sphereVertices.push_back(yPos);
+            sphereVertices.push_back(zPos);
+            sphereVertices.push_back(xSegment);
+            sphereVertices.push_back(ySegment);
+        }
+    }
+
+    for(int i = 0; i < Y_SEGMENTS; ++i)
+    {
+        for(int j = 0; j < X_SEGMENTS; ++j)
+        {
+            sphereIndices.push_back(i * (X_SEGMENTS + 1) + j);
+			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j);
+			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j+1);
+			sphereIndices.push_back(i* (X_SEGMENTS + 1) + j);
+			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j + 1);
+			sphereIndices.push_back(i * (X_SEGMENTS + 1) + j + 1);
+        }
+    }
+
+    unsigned sphereVAO, sphereVBO;
+    glGenVertexArrays(1, &sphereVAO);
+    glGenBuffers(1, &sphereVBO);
+    
+    glBindVertexArray(sphereVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
+
+    glBufferData(GL_ARRAY_BUFFER, sphereVertices.size() * sizeof(float), &sphereVertices[0], GL_STATIC_DRAW);
+
+    /*GLuint sphereEBO;
+    glGenBuffers(1, &sphereEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(int), &sphereIndices[0], GL_STATIC_DRAW);*/
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3*sizeof(float)));
+    
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
 
     // render loop
     // -----------
@@ -189,6 +256,22 @@ int main()
         glDrawArrays(GL_TRIANGLES, 0, 36);
         glBindVertexArray(0);
         glDepthFunc(GL_LESS);
+
+        shader.use();
+        shader.setMat4("view", view);
+        shader.setMat4("projection", projection);
+        model = glm::translate(model, glm::vec3(-1.0f, 0.0f, -1.0f));
+        model = glm::scale(model, glm::vec3(0.5));
+        shader.setMat4("model", model);
+
+        glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
+		glBindVertexArray(sphereVAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, sphereTexture);
+		//使用线框模式绘制
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		glDrawArrays(GL_TRIANGLES, 0, X_SEGMENTS * Y_SEGMENTS * 6);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
