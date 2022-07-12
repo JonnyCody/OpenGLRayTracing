@@ -163,11 +163,10 @@ int main()
     shader.use();
     shader.setInt("texture1", 0);
 
-    // produce sphere
-    // --------------
+    // produce sphere position
+    // -----------------------
     std::vector<float> sphereVertices;
     std::vector<int> sphereIndices;
-
     for(int y = 0; y <= Y_SEGMENTS; ++y)
     {
         for(int x = 0; x <= X_SEGMENTS; ++x)
@@ -185,18 +184,20 @@ int main()
         }
     }
 
-    for(int i = 0; i < Y_SEGMENTS; ++i)
-    {
-        for(int j = 0; j < X_SEGMENTS; ++j)
-        {
-            sphereIndices.push_back(i * (X_SEGMENTS + 1) + j);
-			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j);
-			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j+1);
-			sphereIndices.push_back(i* (X_SEGMENTS + 1) + j);
-			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j + 1);
-			sphereIndices.push_back(i * (X_SEGMENTS + 1) + j + 1);
-        }
-    }
+    for (int i=0;i<Y_SEGMENTS;i++)
+	{
+		for (int j=0;j<X_SEGMENTS;j++)
+		{
+            int offset = (i * (X_SEGMENTS + 1) + j)/3;
+            offset *= 2; 
+			sphereIndices.push_back(i * (X_SEGMENTS + 1) + j + offset);
+			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j + offset);
+			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j+1 + offset);
+			sphereIndices.push_back(i* (X_SEGMENTS + 1) + j + offset);
+			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j + 1 + offset);
+			sphereIndices.push_back(i * (X_SEGMENTS + 1) + j + 1 + offset);
+		}
+	}
 
     unsigned sphereVAO, sphereVBO;
     glGenVertexArrays(1, &sphereVAO);
@@ -204,22 +205,19 @@ int main()
     
     glBindVertexArray(sphereVAO);
     glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
-
     glBufferData(GL_ARRAY_BUFFER, sphereVertices.size() * sizeof(float), &sphereVertices[0], GL_STATIC_DRAW);
+    
 
-    /*GLuint sphereEBO;
+    unsigned int sphereEBO;
     glGenBuffers(1, &sphereEBO);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(int), &sphereIndices[0], GL_STATIC_DRAW);*/
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(int), &sphereIndices[0], GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3*sizeof(float)));
-    
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+    glBindVertexArray(0);
 
     // render loop
     // -----------
@@ -240,12 +238,31 @@ int main()
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // draw skybox as last
-        glDepthFunc(GL_LEQUAL);
-        skyboxShader.use();
+        shader.use();
+        /*glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);*/
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
+        shader.setMat4("projection", projection);
+        shader.setMat4("view", view);
+        model = glm::translate(model, glm::vec3(-1.0f, 0.0f, -1.0f));
+        shader.setMat4("model", model);
+        glBindVertexArray(sphereVAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, sphereTexture);
+        
+        // glDrawArrays(GL_TRIANGLES, 0, X_SEGMENTS* Y_SEGMENTS * 6);
+        glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
+
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(2.0f, 0.0f, 0.0f));
+        shader.setMat4("model", model);
+        glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
+
+        // draw skybox as last
+        glDepthFunc(GL_LEQUAL);
+        skyboxShader.use();
         view = glm::mat4(glm::mat3(camera.GetViewMatrix()));
         skyboxShader.setMat4("view", view);
         skyboxShader.setMat4("projection", projection);
@@ -256,22 +273,6 @@ int main()
         glDrawArrays(GL_TRIANGLES, 0, 36);
         glBindVertexArray(0);
         glDepthFunc(GL_LESS);
-
-        shader.use();
-        shader.setMat4("view", view);
-        shader.setMat4("projection", projection);
-        model = glm::translate(model, glm::vec3(-1.0f, 0.0f, -1.0f));
-        model = glm::scale(model, glm::vec3(0.5));
-        shader.setMat4("model", model);
-
-        glEnable(GL_CULL_FACE);
-		glCullFace(GL_BACK);
-		glBindVertexArray(sphereVAO);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, sphereTexture);
-		//使用线框模式绘制
-		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		glDrawArrays(GL_TRIANGLES, 0, X_SEGMENTS * Y_SEGMENTS * 6);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
