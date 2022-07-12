@@ -80,8 +80,8 @@ int main()
     // build and compile shaders
     Shader skyboxShader(FileSystem::getPath("src/skybox/skybox.vs").c_str(),
         FileSystem::getPath("src/skybox/skybox.fs").c_str());
-    Shader shader(FileSystem::getPath("src/skybox/balls.vs").c_str(),
-         FileSystem::getPath("src/skybox/balls.fs").c_str());
+    Shader shader(FileSystem::getPath("src/skybox/balls_earth.vs").c_str(),
+         FileSystem::getPath("src/skybox/balls_earth.fs").c_str());
 
     float skyboxVertices[] = {
         // positions          
