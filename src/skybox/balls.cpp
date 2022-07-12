@@ -165,6 +165,9 @@ int main()
 
     // produce sphere position
     // -----------------------
+    std::vector<float> spherePoints;
+    std::vector<float> sphereTexCoords;
+    std::vector<float> sphereNormals;
     std::vector<float> sphereVertices;
     std::vector<int> sphereIndices;
     for(int y = 0; y <= Y_SEGMENTS; ++y)
@@ -176,11 +179,11 @@ int main()
             float xPos = std::cos(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
             float yPos = std::cos(ySegment * PI);
             float zPos = std::sin(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
-            sphereVertices.push_back(xPos);
-            sphereVertices.push_back(yPos);
-            sphereVertices.push_back(zPos);
-            sphereVertices.push_back(xSegment);
-            sphereVertices.push_back(ySegment);
+            spherePoints.push_back(xPos);
+            spherePoints.push_back(yPos);
+            spherePoints.push_back(zPos);
+            sphereTexCoords.push_back(xSegment);
+            sphereTexCoords.push_back(ySegment);
         }
     }
 
@@ -188,14 +191,47 @@ int main()
 	{
 		for (int j=0;j<X_SEGMENTS;j++)
 		{
-            int offset = (i * (X_SEGMENTS + 1) + j)/3;
-            offset *= 2; 
-			sphereIndices.push_back(i * (X_SEGMENTS + 1) + j + offset);
-			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j + offset);
-			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j+1 + offset);
-			sphereIndices.push_back(i* (X_SEGMENTS + 1) + j + offset);
-			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j + 1 + offset);
-			sphereIndices.push_back(i * (X_SEGMENTS + 1) + j + 1 + offset);
+			sphereIndices.push_back(i * (X_SEGMENTS + 1) + j);
+            sphereVertices.push_back(spherePoints[3*(i * (X_SEGMENTS + 1) + j)]);
+            sphereVertices.push_back(spherePoints[3*(i * (X_SEGMENTS + 1) + j) + 1]);
+            sphereVertices.push_back(spherePoints[3*(i * (X_SEGMENTS + 1) + j) + 2]);
+            sphereVertices.push_back(sphereTexCoords[2*(i * (X_SEGMENTS + 1) + j)]);
+            sphereVertices.push_back(sphereTexCoords[2*(i * (X_SEGMENTS + 1) + j) + 1]);
+
+			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j);
+            sphereVertices.push_back(spherePoints[3*((i + 1) * (X_SEGMENTS + 1) + j)]);
+            sphereVertices.push_back(spherePoints[3*((i + 1) * (X_SEGMENTS + 1) + j) + 1]);
+            sphereVertices.push_back(spherePoints[3*((i + 1) * (X_SEGMENTS + 1) + j) + 2]);
+            sphereVertices.push_back(sphereTexCoords[2*((i + 1) * (X_SEGMENTS + 1) + j)]);
+            sphereVertices.push_back(sphereTexCoords[2*((i + 1) * (X_SEGMENTS + 1) + j) + 1]);
+
+			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j + 1);
+            sphereVertices.push_back(spherePoints[3*((i + 1) * (X_SEGMENTS + 1) + j + 1)]);
+            sphereVertices.push_back(spherePoints[3*((i + 1) * (X_SEGMENTS + 1) + j + 1) + 1]);
+            sphereVertices.push_back(spherePoints[3*((i + 1) * (X_SEGMENTS + 1) + j + 1) + 2]);
+            sphereVertices.push_back(sphereTexCoords[2*((i + 1) * (X_SEGMENTS + 1) + j + 1)]);
+            sphereVertices.push_back(sphereTexCoords[2*((i + 1) * (X_SEGMENTS + 1) + j + 1) + 1]);
+
+			sphereIndices.push_back(i * (X_SEGMENTS + 1) + j);
+            sphereVertices.push_back(spherePoints[3*(i * (X_SEGMENTS + 1) + j)]);
+            sphereVertices.push_back(spherePoints[3*(i * (X_SEGMENTS + 1) + j) + 1]);
+            sphereVertices.push_back(spherePoints[3*(i * (X_SEGMENTS + 1) + j) + 2]);
+            sphereVertices.push_back(sphereTexCoords[2*(i * (X_SEGMENTS + 1) + j)]);
+            sphereVertices.push_back(sphereTexCoords[2*(i * (X_SEGMENTS + 1) + j) + 1]);
+
+			sphereIndices.push_back((i + 1) * (X_SEGMENTS + 1) + j + 1);
+            sphereVertices.push_back(spherePoints[3*((i + 1) * (X_SEGMENTS + 1) + j + 1)]);
+            sphereVertices.push_back(spherePoints[3*((i + 1) * (X_SEGMENTS + 1) + j + 1) + 1]);
+            sphereVertices.push_back(spherePoints[3*((i + 1) * (X_SEGMENTS + 1) + j + 1) + 2]);
+            sphereVertices.push_back(sphereTexCoords[2*((i + 1) * (X_SEGMENTS + 1) + j + 1)]);
+            sphereVertices.push_back(sphereTexCoords[2*((i + 1) * (X_SEGMENTS + 1) + j + 1) + 1]);
+
+			sphereIndices.push_back(i * (X_SEGMENTS + 1) + j + 1);
+            sphereVertices.push_back(spherePoints[3*(i * (X_SEGMENTS + 1) + j + 1)]);
+            sphereVertices.push_back(spherePoints[3*(i * (X_SEGMENTS + 1) + j + 1) + 1]);
+            sphereVertices.push_back(spherePoints[3*(i * (X_SEGMENTS + 1) + j + 1) + 2]);
+            sphereVertices.push_back(sphereTexCoords[2*(i * (X_SEGMENTS + 1) + j + 1)]);
+            sphereVertices.push_back(sphereTexCoords[2*(i * (X_SEGMENTS + 1) + j + 1) + 1]);
 		}
 	}
 
@@ -208,10 +244,10 @@ int main()
     glBufferData(GL_ARRAY_BUFFER, sphereVertices.size() * sizeof(float), &sphereVertices[0], GL_STATIC_DRAW);
     
 
-    unsigned int sphereEBO;
-    glGenBuffers(1, &sphereEBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(int), &sphereIndices[0], GL_STATIC_DRAW);
+    // unsigned int sphereEBO;
+    // glGenBuffers(1, &sphereEBO);
+    // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
+    // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(int), &sphereIndices[0], GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
@@ -252,13 +288,14 @@ int main()
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, sphereTexture);
         
-        // glDrawArrays(GL_TRIANGLES, 0, X_SEGMENTS* Y_SEGMENTS * 6);
-        glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
+        glDrawArrays(GL_TRIANGLES, 0, X_SEGMENTS* Y_SEGMENTS * 6);
+        // glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
 
         model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(2.0f, 0.0f, 0.0f));
         shader.setMat4("model", model);
-        glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
+        // glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
+        glDrawArrays(GL_TRIANGLES, 0, X_SEGMENTS * Y_SEGMENTS * 6);
 
         // draw skybox as last
         glDepthFunc(GL_LEQUAL);
