@@ -11,6 +11,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <iostream>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -26,7 +27,7 @@ unsigned int loadCubemap(std::vector<std::string> faces);
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
-Camera camera(glm::vec3(-2.0f, 2.0f, 1.0f));
+Camera camera(glm::vec3(-5.0f, 4.0f, 4.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -132,6 +133,9 @@ int main()
         glBindVertexArray(VAO);
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        
+        /*std::cout << camera.Position[0] << " " << camera.Position[1] << " " << camera.Position[2] << std::endl;
+        std::cout << camera.Front[0] << " " << camera.Front[1] << " " << camera.Front[2] << std::endl;*/
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------

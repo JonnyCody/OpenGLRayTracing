@@ -121,6 +121,8 @@ uniform CameraParameter cameraParameter;
 Lambertian lambertMaterials[4];
 Metallic metallicMaterials[4];
 Dielectric dielectricMaterials[4];
+int stack[10];
+int stackTop = -1;
 
 // functions declaration
 // ---------------------
@@ -137,6 +139,7 @@ Sphere SphereConstructor(vec3 center, float radius);
 bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord hitRec);
 World WorldConstructor();
 bool WorldHit(World world, Ray ray, float t_min, float t_max, inout HitRecord rec);
+bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord rec);
 vec3 WorldTrace(World world, Ray ray, int depth);
 Ray CameraGetRay(Camera camera, vec2 uv);
 vec3 GetEnvironmentColor(World world, Ray ray);
@@ -156,7 +159,34 @@ bool AABBHit(Ray ray, AABB aabb, float tMin, float tMax);
 AABB AABBConstruct(Sphere sphere);
 AABB SurroundingBox(AABB box1, AABB box2);
 void SortAABB(inout World world, int start, int end, int axis);
+void SortAABBBefore(inout World world);
 void BVHNodeConstruct(inout World world);
+bool StackEmpty();
+int StackTop();
+void StackPush(int val);
+int StackPop();
+bool StackEmpty()
+{
+	return stackTop == -1;
+}
+
+int StackTop()
+{
+	return stack[stackTop];
+
+}
+
+void StackPush(int val)
+{
+	++stackTop;
+	stack[stackTop] = val;
+}
+
+int StackPop()
+{
+	return stack[stackTop--];
+}
+
 
 
 void InitScene();
@@ -326,7 +356,7 @@ bool WorldHit(World world, Ray ray, float t_min, float t_max, inout HitRecord re
 
     for(int i = 0; i < world.objectCount; ++i)
     {
-        if(AABBHit(ray, world.aabbs[i], t_min, cloestSoFar)&&SphereHit(world.objects[i], ray, t_min, cloestSoFar, tmpRec))
+        if(SphereHit(world.objects[i], ray, t_min, cloestSoFar, tmpRec))
         {
             rec = tmpRec;
             cloestSoFar = tmpRec.t;
@@ -334,6 +364,54 @@ bool WorldHit(World world, Ray ray, float t_min, float t_max, inout HitRecord re
             hitSomething = true;
         }
     }
+    return hitSomething;
+}
+
+bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord rec)
+{
+    HitRecord tmpRec;
+    float cloestSoFar = t_max;
+    bool hitSomething = false;
+	int curr = world.nodesHead;
+	while(curr != -1 || !StackEmpty())
+	{
+		if(AABBHit(ray, world.nodes[curr].aabb,t_min, cloestSoFar))
+		{
+			if(world.nodes[curr].objectIndex != -1)
+			{
+				if(SphereHit(world.objects[world.nodes[curr].objectIndex],ray, t_min,cloestSoFar,tmpRec))
+				{
+					rec = tmpRec;
+					cloestSoFar = tmpRec.t;
+            		hitSomething = true;
+				}
+				if(StackEmpty())
+				{
+					curr = -1;
+				}
+				else
+				{
+					curr = StackPop();
+				}
+			}
+			else
+			{
+				StackPush(world.nodes[curr].children[1]);
+				curr = world.nodes[curr].children[0];
+			}
+		}
+		else
+		{
+			if(StackEmpty())
+			{
+				curr = -1;
+			}
+			else
+			{
+				curr = StackPop();
+			}
+		}
+	}
     return hitSomething;
 }
 
@@ -346,7 +424,8 @@ vec3 WorldTrace(World world, Ray ray, int depth)
 	while(depth>0)
 	{
 		depth--;
-		if(WorldHit(world, ray, 0.001, 100.0, hitRecord))
+		// if(WorldHit(world, ray, 0.001, RAYCAST_MAX, hitRecord))
+		if(WorldHitBVH(world, ray, 0.001, RAYCAST_MAX, hitRecord))
 		{
 			Ray scatterRay;
 			vec3 attenuation;
@@ -581,8 +660,8 @@ bool AABBHit(Ray ray, AABB aabb, float tMin, float tMax)
 AABB AABBConstruct(Sphere sphere)
 {
 	AABB aabb;
-	aabb.maximum = sphere.center + vec3(sphere.radius);
-	aabb.minimum = sphere.center - vec3(sphere.radius);
+	aabb.maximum = sphere.center + vec3(sphere.radius, sphere.radius, sphere.radius);
+	aabb.minimum = sphere.center - vec3(sphere.radius, sphere.radius, sphere.radius);
 	return aabb;
 }
 
@@ -591,20 +670,10 @@ AABB SurroundingBox(AABB box1, AABB box2)
 	AABB ab;
 	ab.minimum = vec3(min(box1.minimum[0], box2.minimum[0]),
 					min(box1.minimum[1], box2.minimum[1]),
-					min(box1.minimum[1], box2.minimum[1]));
+					min(box1.minimum[2], box2.minimum[2]));
 	ab.maximum = vec3(max(box1.maximum[0], box2.maximum[0]),
 					max(box1.maximum[1], box2.maximum[1]),
 					max(box1.maximum[2], box2.maximum[2]));
-	return ab;
-}
-
-AABB SurroundingBox(World world, int start, int end)
-{
-	AABB ab = world.aabbs[start];
-	for(int i = start + 1; i < end; ++i)
-	{
-		ab = SurroundingBox(ab, world.aabbs[i]);
-	}
 	return ab;
 }
 
@@ -612,11 +681,15 @@ void SortAABB(inout World world, int start, int end, int axis)
 {
 	AABB aabb;
 	Sphere sphere;
+	if(end > world.objectCount)
+	{
+		end = world.objectCount;
+	}
 	for(int i = start; i < end - 1 ; ++i)
 	{
-		for(int j = start; j < end-i + start -1;++j)
+		for(int j = start; j < end - i + start -1; ++j)
 		{
-			if(world.aabbs[j].minimum[axis] < world.aabbs[j+1].minimum[axis])
+			if(world.aabbs[j].minimum[axis] > world.aabbs[j+1].minimum[axis])
 			{
 				aabb = world.aabbs[j];
 				world.aabbs[j] = world.aabbs[j+1];
@@ -630,38 +703,54 @@ void SortAABB(inout World world, int start, int end, int axis)
 	}
 }
 
+void SortAABBBefore(inout World world)
+{
+	int span = world.objectCount;
+	int start = 0;
+	int axis = 0;
+	while(span >= 2)
+	{
+		while(start < world.objectCount - 1)
+		{
+			axis = int(Rand()*3)%3;
+			SortAABB(world, start, start + span, axis);
+			start += span;
+		}
+		span/=2;
+	}
+}
+
 void BVHNodeConstruct(inout World world)
 {
-	int axis = int(Rand() * 3) % 3;
-	SortAABB(world, 0, world.objectCount, axis);
+	SortAABBBefore(world);
 	world.nodesHead = world.objectCount * 2 - 2;
 	int parent = world.objectCount;
-	for(int i=0; parent <= world.nodesHead; i += 2)
+	for(int i = 0; parent <= world.nodesHead; i += 2)
 	{
 		if(i < world.objectCount)
 		{
-			world.nodes[i].aabb = AABBConstruct(world.objects[i]);
+			world.nodes[i].aabb = world.aabbs[i];
 			world.nodes[i].children[0] = world.nodes[i].children[1] = -1;
 			world.nodes[i].parent = parent;
 			world.nodes[i].objectIndex = i;
 			if((i+1) < world.objectCount)
 			{
-				world.nodes[i+1].aabb = AABBConstruct(world.objects[i+1]);
-				world.nodes[i+1].children[0] = world.nodes[i+1].children[1] = -1;
-				world.nodes[i+1].parent = parent;
-				world.nodes[i+1].objectIndex = i + 1;
+				world.nodes[i + 1].aabb = world.aabbs[i + 1];
+				world.nodes[i + 1].children[0] = world.nodes[i+1].children[1] = -1;
+				world.nodes[i + 1].parent = parent;
+				world.nodes[i + 1].objectIndex = i + 1;
 			}
 			else
 			{
-				world.nodes[i+1].parent = parent;
+				world.nodes[i + 1].parent = parent;
 			}
 		}
 		else
 		{
 			world.nodes[i].parent = parent;
-			world.nodes[i+1].parent = parent;
+			world.nodes[i + 1].parent = parent;
 		}
-		world.nodes[parent].aabb = SurroundingBox(world.nodes[i].aabb, world.nodes[i+1].aabb);
+		world.nodes[parent].aabb = SurroundingBox(world.nodes[i].aabb, world.nodes[i + 1].aabb);
 		world.nodes[parent].children[0] = i;
 		world.nodes[parent].children[1] = i + 1;
 		world.nodes[parent].objectIndex = -1;
