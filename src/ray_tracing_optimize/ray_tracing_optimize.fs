@@ -16,6 +16,12 @@ uniform sampler2D specularMap;
 uniform sampler2D envMap;
 uniform vec2 screenSize;
 
+layout (std140) uniform spheres
+{
+	vec3 centers[4];
+	float radians[4];
+};
+
 // out variables
 // ------------
 out vec4 FragColor;
@@ -336,10 +342,10 @@ World WorldConstructor()
 
 	world.objectCount = 4;
 	int index  = 0;
-	world.objects[index++] = SphereConstructor(vec3( 0.0, -100.5, -1.0), 100.0, MAT_LAMBERTIAN, 0);
-	world.objects[index++] = SphereConstructor(vec3( 0.0,    0.0, -1.0),   0.5, MAT_METALLIC, 1);
-	world.objects[index++] = SphereConstructor(vec3(-1.0,    0.0, -1.0),   0.5, MAT_DIELECTRIC, 2);
-	world.objects[index++] = SphereConstructor(vec3( 1.0,    0.0, -1.0),   0.5, MAT_LAMBERTIAN, 3);
+	world.objects[index++] = SphereConstructor(centers[0], radians[0], MAT_LAMBERTIAN, 0);
+	world.objects[index++] = SphereConstructor(centers[1], radians[1], MAT_METALLIC, 1);
+	world.objects[index++] = SphereConstructor(centers[2], radians[2], MAT_DIELECTRIC, 2);
+	world.objects[index++] = SphereConstructor(centers[3], radians[3], MAT_LAMBERTIAN, 3);
 	
 	for(int i = 0; i < world.objectCount;++i)
 	{
@@ -722,7 +728,7 @@ void SortAABBBefore(inout World world)
 
 void BVHNodeConstruct(inout World world)
 {
-	SortAABBBefore(world);
+	// SortAABBBefore(world);
 	world.nodesHead = world.objectCount * 2 - 2;
 	int parent = world.objectCount;
 	for(int i = 0; parent <= world.nodesHead; i += 2)

@@ -8,10 +8,12 @@
 #include <learnopengl/shader_m.h>
 #include <learnopengl/camera.h>
 #include <learnopengl/filesystem.h>
+#include <raytracing/sphere.h>
 #include <iostream>
 #include <vector>
 #include <map>
 #include <iostream>
+#include <random>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -36,6 +38,36 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
+// spheres
+std::vector<sphere> spheres;
+void SortSpheres(std::vector<sphere>& spheres)
+{
+    static std::default_random_engine e;
+    static std::uniform_int_distribution<unsigned> u(0, 2);
+
+    spheres.push_back(sphere(vec3(0.0, -100.5, -1.0), 100.0));
+    spheres.push_back(sphere(vec3(0.0, 0.0, -1.0), 0.5));
+    spheres.push_back(sphere(vec3(-1.0, 0.0, -1.0), 0.5));
+    spheres.push_back(sphere(vec3(1.0, 0.0, -1.0), 0.5));
+
+    unsigned span = 4;
+    unsigned start = 0;
+    unsigned axis = 0;
+    while(span >= 2)
+    {
+        while (start < 3)
+        {
+            axis = u(e);
+            std::sort(spheres.begin() + start, spheres.begin() + span, [axis](sphere&a,sphere&b){
+                return a.box.minimum[axis] < b.box.minimum[axis];
+            });
+            start += span;
+        }
+        span /= 2;
+    }
+}
+
+// void 
 int main()
 {
     // glfw: initialize and configure
