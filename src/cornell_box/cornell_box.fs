@@ -100,7 +100,7 @@ struct HitRecord
 
 struct World
 {
-    int objectCount;
+    int sphereCount, rectsXYCount, rectsXZCount, rectsYZCount;
 	int nodesHead;
 	RectangleXY rectsXY[40];
 	RectangleXZ rectsXZ[40];
@@ -183,7 +183,7 @@ DiffuseLight DiffuseLightConstructor(vec3 emit);
 bool MetallicScatter(in Metallic metallic, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
 bool LambertianScatter(in Lambertian lambertian, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
 bool MaterialScatter(in int materialType, in int material, in Ray incident, in HitRecord hitRecord, out Ray scatter, out vec3 attenuation);
-bool LightScatter();
+bool LightScatter(in DiffuseLight light, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
 Dielectric DielectricConstructor(vec3 albedo, float roughness, float ior);
 bool DielectricScatter1(in Dielectric dielectric, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
 bool DielectricScatter2(in Dielectric dielectric, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
@@ -441,7 +441,7 @@ bool RectangleXYHit(RectangleXY rect, Ray ray, float tMin, float tMax, inout Hit
 
 bool RectangleXZHit(RectangleXZ rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec)
 {
-	float t = (rect.k - ray.origin.z)/ray.direction.z;
+	float t = (rect.k - ray.origin.y)/ray.direction.y;
 
 	if (t < tMin || t > tMax)
 	{
@@ -464,7 +464,7 @@ bool RectangleXZHit(RectangleXZ rect, Ray ray, float tMin, float tMax, inout Hit
 
 bool RectangleYZHit(RectangleYZ rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec)
 {
-	float t = (rect.k - ray.origin.y)/ray.direction.y;
+	float t = (rect.k - ray.origin.x)/ray.direction.x;
 
 	if (t < tMin || t > tMax)
 	{
@@ -489,14 +489,14 @@ World WorldConstructor()
 {
 	World world;
 
-	world.objectCount = 3;
+	world.sphereCount = 3;
 	int index  = 0;
 	// world.spheres[index++] = SphereConstructor(vec3( 0.0, -100.5, -1.0), 100.0, MAT_LAMBERTIAN, 0);
 	world.spheres[index++] = SphereConstructor(vec3( 0.0,    0.0, -1.0),   0.5, MAT_METALLIC, 1);
 	world.spheres[index++] = SphereConstructor(vec3(-1.0,    0.0, -1.0),   0.5, MAT_DIELECTRIC, 2);
 	world.spheres[index++] = SphereConstructor(vec3( 1.0,    0.0, -1.0),   0.5, MAT_LAMBERTIAN, 3);
 	
-	for(int i = 0; i < world.objectCount;++i)
+	for(int i = 0; i < world.sphereCount;++i)
 	{
 		world.aabbs[i] = AABBConstruct(world.spheres[i]);
 	}
@@ -506,13 +506,16 @@ World WorldConstructor()
 World WorldConstructor1()
 {
 	World world;
-	world.objectCount = 6;
+	world.sphereCount = 0;
+	world.rectsXYCount = 1;
+	world.rectsXZCount = 3;
+	world.rectsYZCount = 2;
 	world.rectsYZ[0] = RectangleYZConstructor(0.0, 555.0, 0.0, 555.0, 555.0, MAT_LAMBERTIAN, 2);
 	world.rectsYZ[1] = RectangleYZConstructor(0.0, 555.0, 0.0, 555.0,   0.0, MAT_LAMBERTIAN, 0);
 	world.rectsXZ[0] = RectangleXZConstructor(213.0, 343.0, 227.0, 332.0, 554.0, MAT_LIGHT, 0);
 	world.rectsXZ[1] = RectangleXZConstructor(0.0, 555.0, 0.0, 555.0, 0.0, MAT_LAMBERTIAN, 1);
 	world.rectsXZ[2] = RectangleXZConstructor(0.0, 555.0, 0.0, 555.0, 555.0, MAT_LAMBERTIAN, 1);
-	world.rectsXY[0] = RectangleXYConstructor(0.0, 555.0, 0.0, 555.0, 555.0, MAT_LAMBERTIAN, 0);
+	world.rectsXY[0] = RectangleXYConstructor(0.0, 555.0, 0.0, 555.0, 555.0, MAT_LAMBERTIAN, 1);
 	return world;
 }
 
@@ -522,15 +525,18 @@ bool WorldHit(World world, Ray ray, float t_min, float t_max, inout HitRecord re
     float cloestSoFar = t_max;
     bool hitSomething = false;
 
-    for(int i = 0; i < world.objectCount; ++i)
+    for(int i = 0; i < world.sphereCount; ++i)
     {
-        // if(SphereHit(world.spheres[i], ray, t_min, cloestSoFar, tmpRec))
-        // {
-        //     rec = tmpRec;
-        //     cloestSoFar = tmpRec.t;
+        if(SphereHit(world.spheres[i], ray, t_min, cloestSoFar, tmpRec))
+        {
+            rec = tmpRec;
+            cloestSoFar = tmpRec.t;
 
-        //     hitSomething = true;
-        // }
+            hitSomething = true;
+        }
+    }
+	for(int i = 0; i < world.rectsXYCount; ++i)
+	{
 		if(RectangleXYHit(world.rectsXY[i], ray,  t_min,  cloestSoFar, tmpRec))
 		{
 			rec = tmpRec;
@@ -538,21 +544,28 @@ bool WorldHit(World world, Ray ray, float t_min, float t_max, inout HitRecord re
 
             hitSomething = true;
 		}
-		else if(RectangleXZHit(world.rectsXZ[i], ray,  t_min,  cloestSoFar, tmpRec))
+	}
+	for(int i = 0; i < world.rectsXZCount; ++i)
+	{
+		if(RectangleXZHit(world.rectsXZ[i], ray,  t_min,  cloestSoFar, tmpRec))
 		{
 			rec = tmpRec;
             cloestSoFar = tmpRec.t;
 
             hitSomething = true;
 		}
-		else if(RectangleYZHit(world.rectsYZ[i], ray,  t_min,  cloestSoFar, tmpRec))
+	}
+	for(int i = 0; i < world.rectsYZCount; ++i)
+	{
+		if(RectangleYZHit(world.rectsYZ[i], ray,  t_min,  cloestSoFar, tmpRec))
 		{
 			rec = tmpRec;
             cloestSoFar = tmpRec.t;
 
             hitSomething = true;
 		}
-    }
+	}
+		
     return hitSomething;
 }
 
@@ -608,8 +621,7 @@ vec3 WorldTrace(World world, Ray ray, int depth)
 {
     HitRecord hitRecord;
 
-	vec3 frac = vec3(1.0, 1.0, 1.0);
-	vec3 bgColor = vec3(0.0, 0.0, 0.0);
+	vec3 frac = vec3(0.0, 0.0, 0.0);
 	while(depth>0)
 	{
 		depth--;
@@ -620,27 +632,24 @@ vec3 WorldTrace(World world, Ray ray, int depth)
 			vec3 attenuation;
 			if(!MaterialScatter(hitRecord.materialType, hitRecord.material, ray, hitRecord, scatterRay, attenuation))
 			{
-				if(hitRecord.materialType == MAT_LIGHT)
-				{
-					return diffuseLight[hitRecord.material].emit;
-				}
-				else
-				{
-					break;
-				}
+				break;
 			}
-			
-			frac *= attenuation;
+			// if(hitRecord.materialType == MAT_LIGHT)
+			// {
+			// 	frac += diffuseLight[hitRecord.material].emit;
+			// }
+			// else
+			// {
+				if(depth == 39)
+					frac = attenuation;
+				else{
+					frac *= attenuation;
+				}
+			// }
 			ray = scatterRay;
 		}
-		else
-		{
-			bgColor = GetEnvironmentColor(world, ray);
-			break;
-		}
 	}
-
-	return bgColor * frac;
+	return  frac;
 }
 
 Ray CameraGetRay(Camera camera, vec2 uv)
@@ -652,9 +661,10 @@ Ray CameraGetRay(Camera camera, vec2 uv)
 
 vec3 GetEnvironmentColor(World world, Ray ray)
 {
-    vec3 unit_direction = normalize(ray.direction);
-    float t = 0.5 * (unit_direction.y + 1.0);
-    return vec3(1.0, 1.0, 1.0) * (1.0 - t) + vec3(0.5, 0.7, 1.0) * t;
+    // vec3 unit_direction = normalize(ray.direction);
+    // float t = 0.5 * (unit_direction.y + 1.0);
+    // return vec3(1.0, 1.0, 1.0) * (1.0 - t) + vec3(0.5, 0.7, 1.0) * t;
+	return vec3(0.0, 0.0, 0.0);
 
     // vec3 dir = normalize(ray.direction);
 	// float theta = acos(dir.y) / PI;
@@ -678,6 +688,14 @@ bool LambertianScatter(in Lambertian lambertian, in Ray incident, in HitRecord h
 	scattered.origin = hitRecord.position;
 	scattered.direction = hitRecord.normal + RandInSphere();
 
+	return true;
+}
+
+bool LightScatter(in DiffuseLight light, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
+{
+	attenuation = light.emit;
+	scattered.origin = hitRecord.position;
+	scattered.direction = hitRecord.normal + RandInSphere();
 	return true;
 }
 
@@ -836,6 +854,8 @@ bool MaterialScatter(in int materialType, in int material, in Ray incident, in H
 		return MetallicScatter(metallicMaterials[material], incident, hitRecord, scatter, attenuation);
 	else if(materialType==MAT_DIELECTRIC)
 		return DielectricScatter(dielectricMaterials[material], incident, hitRecord, scatter, attenuation);
+	else if(materialType==MAT_LIGHT)
+		return LightScatter(diffuseLight[material], incident, hitRecord, scatter, attenuation);
 	else
 		return false;
 }
@@ -908,9 +928,9 @@ void SortAABB(inout World world, int start, int end, int axis)
 {
 	AABB aabb;
 	Sphere sphere;
-	if(end > world.objectCount)
+	if(end > world.sphereCount)
 	{
-		end = world.objectCount;
+		end = world.sphereCount;
 	}
 	for(int i = start; i < end - 1 ; ++i)
 	{
@@ -932,12 +952,12 @@ void SortAABB(inout World world, int start, int end, int axis)
 
 void SortAABBBefore(inout World world)
 {
-	int span = world.objectCount;
+	int span = world.sphereCount;
 	int start = 0;
 	int axis = 0;
 	while(span >= 2)
 	{
-		while(start < world.objectCount - 1)
+		while(start < world.sphereCount - 1)
 		{
 			axis = int(Rand()*3)%3;
 			SortAABB(world, start, start + span, axis);
@@ -950,17 +970,17 @@ void SortAABBBefore(inout World world)
 void BVHNodeConstruct(inout World world)
 {
 	SortAABBBefore(world);
-	world.nodesHead = world.objectCount * 2 - 2;
-	int parent = world.objectCount;
+	world.nodesHead = world.sphereCount * 2 - 2;
+	int parent = world.sphereCount;
 	for(int i = 0; parent <= world.nodesHead; i += 2)
 	{
-		if(i < world.objectCount)
+		if(i < world.sphereCount)
 		{
 			world.nodes[i].aabb = world.aabbs[i];
 			world.nodes[i].children[0] = world.nodes[i].children[1] = -1;
 			world.nodes[i].parent = parent;
 			world.nodes[i].objectIndex = i;
-			if((i+1) < world.objectCount)
+			if((i+1) < world.sphereCount)
 			{
 				world.nodes[i + 1].aabb = world.aabbs[i + 1];
 				world.nodes[i + 1].children[0] = world.nodes[i+1].children[1] = -1;
@@ -1014,8 +1034,7 @@ void InitScene()
 void InitScene1()
 {
 	world = WorldConstructor1();
-	vec3 lookAt = vec3(278.0, 278.0, 0.0);
-	camera = CameraConstructor(cameraParameter.lookFrom, cameraParameter.lookAt, cameraParameter.vup, 40.0, cameraParameter.aspectRatio);
+	camera = CameraConstructor(cameraParameter.lookFrom, cameraParameter.lookAt, cameraParameter.vup, cameraParameter.vfov, cameraParameter.aspectRatio);
 	// red
 	lambertMaterials[0] = LambertianConstructor(vec3(0.65, 0.05, 0.05));
 	// white
@@ -1023,7 +1042,7 @@ void InitScene1()
 	// green
 	lambertMaterials[2] = LambertianConstructor(vec3(0.12, 0.45, 0.15));
 	// light
-	diffuseLight[0] = DiffuseLightConstructor(vec3(15.0, 15.0, 15.0));
+	diffuseLight[0] = DiffuseLightConstructor(vec3(2.0, 2.0, 2.0));
 
 }
 
@@ -1034,11 +1053,11 @@ void main()
 	InitScene1();
 	// BVHNodeConstruct(world);
 	vec3 col = vec3(0.0, 0.0, 0.0);
-	int ns = 50;
+	int ns = 10;
 	for(int i=0; i<ns; i++)
 	{
 		Ray ray = CameraGetRay(camera, screenCoord + RandInSquare() / screenSize);
-		col += WorldTrace(world, ray, 50);
+		col += WorldTrace(world, ray, 40);
 	}
 	col /= ns;
 

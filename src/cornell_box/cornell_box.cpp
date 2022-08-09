@@ -128,14 +128,14 @@ int main()
         shader.setVec3("cameraParameter.lookFrom", camera.Position);
         shader.setVec3("cameraParameter.lookAt", camera.Position + camera.Front);
         shader.setVec3("cameraParameter.vup", camera.WorldUp);
-        shader.setFloat("cameraParameter.vfov", 20.0);
+        shader.setFloat("cameraParameter.vfov", 40.0);
         shader.setFloat("cameraParameter.aspectRatio", (float)SCR_WIDTH/SCR_HEIGHT);
         glBindVertexArray(VAO);
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         
-        std::cout << camera.Position[0] << " " << camera.Position[1] << " " << camera.Position[2] << std::endl;
-        std::cout << camera.Front[0] << " " << camera.Front[1] << " " << camera.Front[2] << std::endl;
+        /*std::cout << camera.Position[0] << " " << camera.Position[1] << " " << camera.Position[2] << std::endl;
+        std::cout << camera.Front[0] << " " << camera.Front[1] << " " << camera.Front[2] << std::endl;*/
         //std::cout << camera.WorldUp[0] << " " << camera.WorldUp[1] << " " << camera.WorldUp[2] << std::endl;
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
