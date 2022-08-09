@@ -506,16 +506,29 @@ World WorldConstructor()
 World WorldConstructor1()
 {
 	World world;
-	world.sphereCount = 0;
-	world.rectsXYCount = 1;
-	world.rectsXZCount = 3;
-	world.rectsYZCount = 2;
-	world.rectsYZ[0] = RectangleYZConstructor(0.0, 555.0, 0.0, 555.0, 555.0, MAT_LAMBERTIAN, 2);
-	world.rectsYZ[1] = RectangleYZConstructor(0.0, 555.0, 0.0, 555.0,   0.0, MAT_LAMBERTIAN, 0);
+	world.sphereCount = 1;
+	world.rectsXYCount = 5;
+	world.rectsXZCount = 7;
+	world.rectsYZCount = 6;
+	world.rectsYZ[0] = RectangleYZConstructor(  0.0, 555.0,   0.0, 555.0, 555.0, MAT_LAMBERTIAN, 2);
+	world.rectsYZ[1] = RectangleYZConstructor(  0.0, 555.0,   0.0, 555.0,   0.0, MAT_LAMBERTIAN, 0);
+	world.rectsYZ[2] = RectangleYZConstructor(  0.0, 165.0,  65.0, 230.0, 130.0, MAT_LAMBERTIAN, 1);
+	world.rectsYZ[3] = RectangleYZConstructor(  0.0, 165.0,  65.0, 230.0, 295.0, MAT_LAMBERTIAN, 1);
+	world.rectsYZ[4] = RectangleYZConstructor(  0.0, 330.0, 295.0, 460.0, 265.0, MAT_LAMBERTIAN, 1);
+	world.rectsYZ[5] = RectangleYZConstructor(  0.0, 330.0, 295.0, 460.0, 430.0, MAT_LAMBERTIAN, 1);
 	world.rectsXZ[0] = RectangleXZConstructor(213.0, 343.0, 227.0, 332.0, 554.0, MAT_LIGHT, 0);
-	world.rectsXZ[1] = RectangleXZConstructor(0.0, 555.0, 0.0, 555.0, 0.0, MAT_LAMBERTIAN, 1);
-	world.rectsXZ[2] = RectangleXZConstructor(0.0, 555.0, 0.0, 555.0, 555.0, MAT_LAMBERTIAN, 1);
-	world.rectsXY[0] = RectangleXYConstructor(0.0, 555.0, 0.0, 555.0, 555.0, MAT_LAMBERTIAN, 1);
+	world.rectsXZ[1] = RectangleXZConstructor(  0.0, 555.0,   0.0, 555.0,   0.0, MAT_LAMBERTIAN, 1);
+	world.rectsXZ[2] = RectangleXZConstructor(  0.0, 555.0,   0.0, 555.0, 555.0, MAT_LAMBERTIAN, 1);
+	world.rectsXZ[3] = RectangleXZConstructor(130.0, 195.0,  65.0, 230.0,   0.0, MAT_LAMBERTIAN, 1);
+	world.rectsXZ[4] = RectangleXZConstructor(130.0, 195.0,  65.0, 230.0, 165.0, MAT_LAMBERTIAN, 1);
+	world.rectsXZ[5] = RectangleXZConstructor(265.0, 430.0, 295.0, 460.0,   0.0, MAT_LAMBERTIAN, 1);
+	world.rectsXZ[6] = RectangleXZConstructor(265.0, 430.0, 295.0, 460.0, 330.0, MAT_LAMBERTIAN, 1);
+	world.rectsXY[0] = RectangleXYConstructor(  0.0, 555.0,   0.0, 555.0, 555.0, MAT_LAMBERTIAN, 1);
+	world.rectsXY[1] = RectangleXYConstructor(130.0, 295.0,   0.0, 165.0,  65.0, MAT_LAMBERTIAN, 1);
+	world.rectsXY[2] = RectangleXYConstructor(130.0, 295.0,   0.0, 165.0, 230.0, MAT_LAMBERTIAN, 1);
+	world.rectsXY[3] = RectangleXYConstructor(265.0, 430.0,   0.0, 330.0, 460.0, MAT_LAMBERTIAN, 1);
+	world.rectsXY[4] = RectangleXYConstructor(265.0, 430.0,   0.0, 330.0, 295.0, MAT_LAMBERTIAN, 1);
+	world.spheres[0] = SphereConstructor(vec3(200.0, 440, 200), 100, MAT_METALLIC, 0);
 	return world;
 }
 
@@ -620,7 +633,7 @@ bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord
 vec3 WorldTrace(World world, Ray ray, int depth)
 {
     HitRecord hitRecord;
-
+	int initDepth = depth;
 	vec3 frac = vec3(0.0, 0.0, 0.0);
 	while(depth>0)
 	{
@@ -640,7 +653,7 @@ vec3 WorldTrace(World world, Ray ray, int depth)
 			// }
 			// else
 			// {
-				if(depth == 39)
+				if(depth == initDepth - 1)
 					frac = attenuation;
 				else{
 					frac *= attenuation;
@@ -1043,7 +1056,11 @@ void InitScene1()
 	lambertMaterials[2] = LambertianConstructor(vec3(0.12, 0.45, 0.15));
 	// light
 	diffuseLight[0] = DiffuseLightConstructor(vec3(2.0, 2.0, 2.0));
-
+	// metel sphere
+	metallicMaterials[0] = MetallicConstructor(vec3(0.7, 0.6, 0.5), 0.0);
+	metallicMaterials[1] = MetallicConstructor(vec3(0.5, 0.7, 0.5), 0.1);
+	metallicMaterials[2] = MetallicConstructor(vec3(0.5, 0.5, 0.7), 0.2);
+	metallicMaterials[3] = MetallicConstructor(vec3(0.7, 0.7, 0.7), 0.3);
 }
 
 // main function
@@ -1053,11 +1070,11 @@ void main()
 	InitScene1();
 	// BVHNodeConstruct(world);
 	vec3 col = vec3(0.0, 0.0, 0.0);
-	int ns = 10;
-	for(int i=0; i<ns; i++)
+	int ns = 50;
+	for(int i = 0; i < ns; ++i)
 	{
 		Ray ray = CameraGetRay(camera, screenCoord + RandInSquare() / screenSize);
-		col += WorldTrace(world, ray, 40);
+		col += WorldTrace(world, ray, 5);
 	}
 	col /= ns;
 
