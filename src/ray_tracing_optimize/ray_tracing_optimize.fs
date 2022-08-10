@@ -16,10 +16,9 @@ uniform sampler2D specularMap;
 uniform sampler2D envMap;
 uniform vec2 screenSize;
 
-layout (std140) uniform spheres
+layout (std140) uniform spheresParameter
 {
-	vec3 centers[4];
-	float radians[4];
+	mat4 loc;
 };
 
 // out variables
@@ -342,10 +341,14 @@ World WorldConstructor()
 
 	world.objectCount = 4;
 	int index  = 0;
-	world.objects[index++] = SphereConstructor(centers[0], radians[0], MAT_LAMBERTIAN, 0);
-	world.objects[index++] = SphereConstructor(centers[1], radians[1], MAT_METALLIC, 1);
-	world.objects[index++] = SphereConstructor(centers[2], radians[2], MAT_DIELECTRIC, 2);
-	world.objects[index++] = SphereConstructor(centers[3], radians[3], MAT_LAMBERTIAN, 3);
+	world.objects[index++] = SphereConstructor(vec3(loc[0][0], loc[0][1], loc[0][2]),loc[0][3], MAT_LAMBERTIAN, 0);
+	world.objects[index++] = SphereConstructor(vec3(loc[1][0], loc[1][1], loc[1][2]),loc[1][3], MAT_METALLIC, 1);
+	world.objects[index++] = SphereConstructor(vec3(loc[2][0], loc[2][1], loc[2][2]),loc[2][3], MAT_DIELECTRIC, 2);
+	world.objects[index++] = SphereConstructor(vec3(loc[3][0], loc[3][1], loc[3][2]),loc[3][3], MAT_LAMBERTIAN, 3);
+	// world.objects[index++] = SphereConstructor(vec3( 0.0, -100.5, -1.0), 100.0, MAT_LAMBERTIAN, 0);
+	// world.objects[index++] = SphereConstructor(vec3( 0.0,    0.0, -1.0),   0.5, MAT_METALLIC, 1);
+	// world.objects[index++] = SphereConstructor(vec3(-1.0,    0.0, -1.0),   0.5, MAT_DIELECTRIC, 2);
+	// world.objects[index++] = SphereConstructor(vec3( 1.0,    0.0, -1.0),   0.5, MAT_LAMBERTIAN, 3);
 	
 	for(int i = 0; i < world.objectCount;++i)
 	{

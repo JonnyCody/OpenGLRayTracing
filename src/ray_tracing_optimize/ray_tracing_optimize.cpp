@@ -40,6 +40,9 @@ float lastFrame = 0.0f;
 
 // spheres
 std::vector<sphere> spheres;
+
+glm::mat4 loc;
+
 void SortSpheres(std::vector<sphere>& spheres)
 {
     static std::default_random_engine e;
@@ -65,6 +68,21 @@ void SortSpheres(std::vector<sphere>& spheres)
         }
         span /= 2;
     }
+    for(unsigned int i = 0; i < 4; ++i)
+    {
+        loc[i][0] = spheres[i].center[0];
+        loc[i][1] = spheres[i].center[1];
+        loc[i][2] = spheres[i].center[2];
+        loc[i][3] = spheres[i].radius;
+    }
+    // for (auto& i : spheresParamter.radius)
+    // {
+    //     std::cout << i << std::endl;
+    // }
+    // for (auto& i : spheresParamter.centers)
+    // {
+    //     std::cout << i << std::endl;
+    // }
 }
 
 // void 
@@ -76,7 +94,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
+    SortSpheres(spheres);
     // window create
     // -------------
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "OpenGLRayTracing", NULL, NULL);
@@ -130,11 +148,23 @@ int main()
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_DYNAMIC_DRAW);
+    
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
+    // configure a uniform buffer object
+    // ---------------------------------
+    unsigned int uniformBlockIndexSphere = glGetUniformBlockIndex(shader.ID, "spheresParameter");
+    glUniformBlockBinding(shader.ID, uniformBlockIndexSphere, 0);
+    unsigned int uboSpheres;
+    glGenBuffers(1, &uboSpheres);
+    glBindBuffer(GL_UNIFORM_BUFFER, uboSpheres);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), glm::value_ptr(loc), GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    
+    glBindBufferRange(GL_UNIFORM_BUFFER, 0, uboSpheres, 0, sizeof(glm::mat4));
+    
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -154,6 +184,11 @@ int main()
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        /*glBindBuffer(GL_UNIFORM_BUFFER, uboSpheres);
+        glBufferData(GL_UNIFORM_BUFFER, sizeof(spheresParamter), &spheresParamter, GL_STATIC_DRAW);
+        glBindBufferRange(GL_UNIFORM_BUFFER, 0, uboSpheres, 0, sizeof(spheresParamter));
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);*/
+        
         shader.use();
 
         shader.setVec2("screenSize", { SCR_WIDTH, SCR_HEIGHT });

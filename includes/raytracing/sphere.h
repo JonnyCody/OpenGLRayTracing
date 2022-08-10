@@ -14,9 +14,10 @@ class sphere : public hittable
 public:
     using point3 = glm::vec3;
 
-    sphere(const vec3 cen, double rad) : center(cen), radius(rad)
+    sphere(const vec3 cen, double rad) : center(cen), radius(rad), box(center - vec3(radius, radius, radius),
+        center + vec3(radius, radius, radius))
     {
-        bounding_box(box);
+        
     }
 
     virtual bool bounding_box(aabb& output_box) const override;

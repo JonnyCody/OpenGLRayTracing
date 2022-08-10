@@ -11,7 +11,6 @@ class aabb
 {
 public:
     using point3 = glm::vec3;
-    aabb(){}
     aabb(const point3& a, const point3& b) {minimum = a; maximum = b;}
 
     point3 min()  {return minimum;}
