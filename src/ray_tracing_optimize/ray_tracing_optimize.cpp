@@ -24,10 +24,12 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 unsigned int loadTexture(const char* path);
 unsigned int loadCubemap(std::vector<std::string> faces);
+void SortSpheres(std::vector<sphere>& spheres);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
+const unsigned int BIG_DATA_SIZE = 1000;
 
 Camera camera(glm::vec3(-5.0f, 4.0f, 4.0f));
 float lastX = SCR_WIDTH / 2.0f;
@@ -40,50 +42,7 @@ float lastFrame = 0.0f;
 
 // spheres
 std::vector<sphere> spheres;
-
-glm::mat4 loc;
-
-void SortSpheres(std::vector<sphere>& spheres)
-{
-    static std::default_random_engine e;
-    static std::uniform_int_distribution<unsigned> u(0, 2);
-
-    spheres.push_back(sphere(vec3(0.0, -100.5, -1.0), 100.0));
-    spheres.push_back(sphere(vec3(0.0, 0.0, -1.0), 0.5));
-    spheres.push_back(sphere(vec3(-1.0, 0.0, -1.0), 0.5));
-    spheres.push_back(sphere(vec3(1.0, 0.0, -1.0), 0.5));
-
-    unsigned span = 4;
-    unsigned start = 0;
-    unsigned axis = 0;
-    while(span >= 2)
-    {
-        while (start < 3)
-        {
-            axis = u(e);
-            std::sort(spheres.begin() + start, spheres.begin() + span, [axis](sphere&a,sphere&b){
-                return a.box.minimum[axis] < b.box.minimum[axis];
-            });
-            start += span;
-        }
-        span /= 2;
-    }
-    for(unsigned int i = 0; i < 4; ++i)
-    {
-        loc[i][0] = spheres[i].center[0];
-        loc[i][1] = spheres[i].center[1];
-        loc[i][2] = spheres[i].center[2];
-        loc[i][3] = spheres[i].radius;
-    }
-    // for (auto& i : spheresParamter.radius)
-    // {
-    //     std::cout << i << std::endl;
-    // }
-    // for (auto& i : spheresParamter.centers)
-    // {
-    //     std::cout << i << std::endl;
-    // }
-}
+float *spheresData = new float[BIG_DATA_SIZE];
 
 // void 
 int main()
@@ -152,19 +111,18 @@ int main()
     
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
+    
+    // generate buffer texture
+    // -----------------------
+    unsigned int tboSpheresId, tboBufferId;
+    glGenTextures(1, &tboSpheresId);
+    glGenBuffers(1, &tboBufferId);
+    glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE, spheresData, GL_STATIC_DRAW);
 
-    // configure a uniform buffer object
-    // ---------------------------------
-    unsigned int uniformBlockIndexSphere = glGetUniformBlockIndex(shader.ID, "spheresParameter");
-    glUniformBlockBinding(shader.ID, uniformBlockIndexSphere, 0);
-    unsigned int uboSpheres;
-    glGenBuffers(1, &uboSpheres);
-    glBindBuffer(GL_UNIFORM_BUFFER, uboSpheres);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), glm::value_ptr(loc), GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_UNIFORM_BUFFER, 0);
-    
-    glBindBufferRange(GL_UNIFORM_BUFFER, 0, uboSpheres, 0, sizeof(glm::mat4));
-    
+    shader.use();
+    shader.setInt("spheresData", 0);
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -197,6 +155,11 @@ int main()
         shader.setVec3("cameraParameter.vup", camera.WorldUp);
         shader.setFloat("cameraParameter.vfov", 20.0);
         shader.setFloat("cameraParameter.aspectRatio", (float)SCR_WIDTH/SCR_HEIGHT);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_BUFFER, tboSpheresId);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, tboBufferId);
+        
+
         glBindVertexArray(VAO);
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -215,6 +178,7 @@ int main()
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
+    delete [] spheresData;
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
@@ -336,4 +300,38 @@ unsigned int loadCubemap(std::vector<std::string> faces)
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
     return textureID;
+}
+
+void SortSpheres(std::vector<sphere>& spheres)
+{
+    static std::default_random_engine e;
+    static std::uniform_int_distribution<unsigned> u(0, 2);
+
+    spheres.push_back(sphere(vec3(0.0, -100.5, -1.0), 100.0));
+    spheres.push_back(sphere(vec3(0.0, 0.0, -1.0), 0.5));
+    spheres.push_back(sphere(vec3(-1.0, 0.0, -1.0), 0.5));
+    spheres.push_back(sphere(vec3(1.0, 0.0, -1.0), 0.5));
+
+    unsigned span = 4;
+    unsigned start = 0;
+    unsigned axis = 0;
+    while(span >= 2)
+    {
+        while (start < 3)
+        {
+            axis = u(e);
+            std::sort(spheres.begin() + start, spheres.begin() + span, [axis](sphere&a,sphere&b){
+                return a.box.minimum[axis] < b.box.minimum[axis];
+            });
+            start += span;
+        }
+        span /= 2;
+    }
+    for(int i = 0; i < 4; ++i)
+    {
+        spheresData[4*i] = spheres[i].center[0];
+        spheresData[4*i+1] = spheres[i].center[1];
+        spheresData[4*i+2] = spheres[i].center[2];
+        spheresData[4*i+3] = spheres[i].radius;
+    }
 }

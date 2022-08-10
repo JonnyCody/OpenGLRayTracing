@@ -1,4 +1,5 @@
 #version 330 core
+
 #define PI 3.14159265
 const float RAYCAST_MAX = 100000.0;
 const int MAT_LAMBERTIAN = 0;
@@ -15,11 +16,8 @@ uniform sampler2D diffuseMap;
 uniform sampler2D specularMap;
 uniform sampler2D envMap;
 uniform vec2 screenSize;
+uniform samplerBuffer spheresData;
 
-layout (std140) uniform spheresParameter
-{
-	mat4 loc;
-};
 
 // out variables
 // ------------
@@ -27,6 +25,7 @@ out vec4 FragColor;
 
 // define struct
 // -------------
+
 struct Ray 
 {
     vec3 origin;
@@ -41,7 +40,6 @@ struct CameraParameter
 	float vfov;
 	float aspectRatio;
 };
-
 struct Camera 
 {
     vec3 origin;
@@ -338,13 +336,13 @@ bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord
 World WorldConstructor()
 {
 	World world;
-
+	
 	world.objectCount = 4;
 	int index  = 0;
-	world.objects[index++] = SphereConstructor(vec3(loc[0][0], loc[0][1], loc[0][2]),loc[0][3], MAT_LAMBERTIAN, 0);
-	world.objects[index++] = SphereConstructor(vec3(loc[1][0], loc[1][1], loc[1][2]),loc[1][3], MAT_METALLIC, 1);
-	world.objects[index++] = SphereConstructor(vec3(loc[2][0], loc[2][1], loc[2][2]),loc[2][3], MAT_DIELECTRIC, 2);
-	world.objects[index++] = SphereConstructor(vec3(loc[3][0], loc[3][1], loc[3][2]),loc[3][3], MAT_LAMBERTIAN, 3);
+	world.objects[index++] = SphereConstructor(vec3(texelFetch(spheresData, 0).x, texelFetch(spheresData, 1).x, texelFetch(spheresData, 2).x), texelFetch(spheresData, 3).x, MAT_LAMBERTIAN, 0);
+	world.objects[index++] = SphereConstructor(vec3(texelFetch(spheresData, 4).x, texelFetch(spheresData, 5).x, texelFetch(spheresData, 6).x), texelFetch(spheresData, 7).x, MAT_METALLIC, 1);
+	world.objects[index++] = SphereConstructor(vec3(texelFetch(spheresData, 8).x, texelFetch(spheresData, 9).x, texelFetch(spheresData,10).x), texelFetch(spheresData,11).x, MAT_DIELECTRIC, 2);
+	world.objects[index++] = SphereConstructor(vec3(texelFetch(spheresData,12).x, texelFetch(spheresData,13).x, texelFetch(spheresData,14).x), texelFetch(spheresData,15).x, MAT_LAMBERTIAN, 3);
 	// world.objects[index++] = SphereConstructor(vec3( 0.0, -100.5, -1.0), 100.0, MAT_LAMBERTIAN, 0);
 	// world.objects[index++] = SphereConstructor(vec3( 0.0,    0.0, -1.0),   0.5, MAT_METALLIC, 1);
 	// world.objects[index++] = SphereConstructor(vec3(-1.0,    0.0, -1.0),   0.5, MAT_DIELECTRIC, 2);
