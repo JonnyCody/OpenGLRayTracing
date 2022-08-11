@@ -6,30 +6,28 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "hittable.h"
+#include "material.h"
 
 using glm::vec3;
 
-class sphere : public hittable
+class Sphere : public Hittable
 {
 public:
-    using point3 = glm::vec3;
 
-    sphere(const vec3 cen, double rad) : center(cen), radius(rad), box(center - vec3(radius, radius, radius),
-        center + vec3(radius, radius, radius))
-    {
-        
-    }
+    Sphere(const vec3& cen, float rad, Material material) : center(cen), radius(rad), material(material), 
+    box(center - vec3(radius, radius, radius),center + vec3(radius, radius, radius)){}
 
-    virtual bool bounding_box(aabb& output_box) const override;
+    virtual bool bounding_box(AABB& output_box) const override;
 
     point3 center;
-    double radius;
-    aabb box;
+    float radius;
+    Material material;
+    AABB box;
 };
 
-bool sphere::bounding_box(aabb &output_box) const
+bool Sphere::bounding_box(AABB &output_box) const
 {
-    output_box = aabb(center - vec3(radius, radius, radius),
+    output_box = AABB(center - vec3(radius, radius, radius),
                       center + vec3(radius, radius, radius));
 
     return true;

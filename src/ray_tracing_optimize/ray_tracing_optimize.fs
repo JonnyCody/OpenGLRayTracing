@@ -12,9 +12,6 @@ in vec2 screenCoord;
 
 // textures
 // --------
-uniform sampler2D diffuseMap;
-uniform sampler2D specularMap;
-uniform sampler2D envMap;
 uniform vec2 screenSize;
 uniform samplerBuffer spheresData;
 
@@ -50,12 +47,19 @@ struct Camera
 	float lensRadius;
 }; 
 
+struct Material
+{
+	int materialType;
+	vec3 color;
+	float roughness;
+	float ior;
+};
+
 struct Sphere 
 {
     vec3 center;
     float radius;
-    int materialType;
-    int material;
+    Material material;
 }; 
 
 struct AABB
@@ -78,15 +82,14 @@ struct HitRecord
 	vec3 position;
 	vec3 normal;
 
-    int materialType;
-    int material;
+    Material material;
 };
 
 struct World
 {
     int objectCount;
 	int nodesHead;
-    Sphere objects[40];
+    // Sphere spheres[40];
 	AABB aabbs[40];
 	BVHNode nodes[40];
 };
@@ -117,13 +120,13 @@ struct Dielectric
 // ----------------
 uniform float rdSeed[4];
 int rdCnt = 0;
-
 World world;
 Camera camera;
 uniform CameraParameter cameraParameter;
-Lambertian lambertMaterials[4];
-Metallic metallicMaterials[4];
-Dielectric dielectricMaterials[4];
+uniform int objectCount;
+// Lambertian lambertMaterials[4];
+// Metallic metallicMaterials[4];
+// Dielectric dielectricMaterials[4];
 int stack[10];
 int stackTop = -1;
 
@@ -138,23 +141,23 @@ Ray RayConstructor(vec3 origin, vec3 direction);
 vec3 RayGetPointAt(Ray ray, float t);
 float RayHitSphere(Ray ray, Sphere sphere);
 Camera CameraConstructor(vec3 lookFrom, vec3 lookAt, vec3 vup, float vfov, float aspectRatio);
-Sphere SphereConstructor(vec3 center, float radius);
+Sphere SphereConstructor(vec3 center, float radius, Material material);
+Sphere GetSphereFromTexture(int sphereIndex);
 bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord hitRec);
-World WorldConstructor();
 bool WorldHit(World world, Ray ray, float t_min, float t_max, inout HitRecord rec);
 bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord rec);
-vec3 WorldTrace(World world, Ray ray, int depth);
+vec3 WorldTrace(Ray ray, int depth);
 Ray CameraGetRay(Camera camera, vec2 uv);
 vec3 GetEnvironmentColor(World world, Ray ray);
 Lambertian LambertianConstructor(vec3 albedo);
 Metallic MetallicConstructor(vec3 albedo, float roughness);
-bool MetallicScatter(in Metallic metallic, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
-bool LambertianScatter(in Lambertian lambertian, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
-bool MaterialScatter(in int materialType, in int material, in Ray incident, in HitRecord hitRecord, out Ray scatter, out vec3 attenuation);
+bool MetallicScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
+bool LambertianScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
+bool MaterialScatter(in Ray incident, in HitRecord hitRecord, out Ray scatter, out vec3 attenuation);
 Dielectric DielectricConstructor(vec3 albedo, float roughness, float ior);
-bool DielectricScatter1(in Dielectric dielectric, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
-bool DielectricScatter2(in Dielectric dielectric, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
-bool DielectricScatter(in Dielectric dielectric, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
+bool DielectricScatter1(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
+bool DielectricScatter2(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
+bool DielectricScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
 float schlick(float cosine, float ior);
 vec3 reflect(in vec3 incident, in vec3 normal);
 bool refract(vec3 v, vec3 n, float niOverNt, out vec3 refracted);
@@ -189,10 +192,6 @@ int StackPop()
 {
 	return stack[stackTop--];
 }
-
-
-
-void InitScene();
 
 // functions definition
 // --------------------
@@ -282,15 +281,31 @@ Camera CameraConstructor(vec3 lookFrom, vec3 lookAt, vec3 vup, float vfov, float
 	return camera;
 }
 
-Sphere SphereConstructor(vec3 center, float radius, int materialType, int material)
+Sphere SphereConstructor(vec3 center, float radius, Material material)
 {
 	Sphere sphere;
 
 	sphere.center = center;
 	sphere.radius = radius;
-    sphere.materialType = materialType;
-	sphere.material = material;
+    sphere.material = material;
 	return sphere;
+}
+
+Sphere GetSphereFromTexture(int sphereIndex)
+{
+	Material tmpMatrial;
+	vec4 pack;
+	int index = sphereIndex*3;
+	pack = texelFetch(spheresData, index);
+	vec3 center = pack.xyz;
+	float radius = pack.w;
+	pack = texelFetch(spheresData, index + 1);
+	tmpMatrial.color = pack.xyz;
+	tmpMatrial.materialType = int(pack.w);
+	pack = texelFetch(spheresData, index + 2);
+	tmpMatrial.roughness = pack.x;
+	tmpMatrial.ior = pack.y;
+	return SphereConstructor(center, radius, tmpMatrial);
 }
 
 bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord hitRec)
@@ -311,7 +326,6 @@ bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord
             hitRec.t = temp;
             hitRec.position = RayGetPointAt(ray, hitRec.t);
             hitRec.normal = (hitRec.position - sphere.center)/ sphere.radius;
-            hitRec.materialType = sphere.materialType;
             hitRec.material = sphere.material;
 
             return true;
@@ -323,8 +337,7 @@ bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord
 			hitRec.t = temp;
 			hitRec.position = RayGetPointAt(ray, hitRec.t);
 			hitRec.normal = (hitRec.position - sphere.center) / sphere.radius;
-			hitRec.materialType = sphere.materialType;
-            hitRec.material = sphere.material;
+			hitRec.material = sphere.material;
 
 			return true;
 		}
@@ -333,37 +346,15 @@ bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord
     return false;
 }
 
-World WorldConstructor()
-{
-	World world;
-	
-	world.objectCount = 4;
-	int index  = 0;
-	world.objects[index++] = SphereConstructor(vec3(texelFetch(spheresData, 0).x, texelFetch(spheresData, 1).x, texelFetch(spheresData, 2).x), texelFetch(spheresData, 3).x, MAT_LAMBERTIAN, 0);
-	world.objects[index++] = SphereConstructor(vec3(texelFetch(spheresData, 4).x, texelFetch(spheresData, 5).x, texelFetch(spheresData, 6).x), texelFetch(spheresData, 7).x, MAT_METALLIC, 1);
-	world.objects[index++] = SphereConstructor(vec3(texelFetch(spheresData, 8).x, texelFetch(spheresData, 9).x, texelFetch(spheresData,10).x), texelFetch(spheresData,11).x, MAT_DIELECTRIC, 2);
-	world.objects[index++] = SphereConstructor(vec3(texelFetch(spheresData,12).x, texelFetch(spheresData,13).x, texelFetch(spheresData,14).x), texelFetch(spheresData,15).x, MAT_LAMBERTIAN, 3);
-	// world.objects[index++] = SphereConstructor(vec3( 0.0, -100.5, -1.0), 100.0, MAT_LAMBERTIAN, 0);
-	// world.objects[index++] = SphereConstructor(vec3( 0.0,    0.0, -1.0),   0.5, MAT_METALLIC, 1);
-	// world.objects[index++] = SphereConstructor(vec3(-1.0,    0.0, -1.0),   0.5, MAT_DIELECTRIC, 2);
-	// world.objects[index++] = SphereConstructor(vec3( 1.0,    0.0, -1.0),   0.5, MAT_LAMBERTIAN, 3);
-	
-	for(int i = 0; i < world.objectCount;++i)
-	{
-		world.aabbs[i] = AABBConstruct(world.objects[i]);
-	}
-	return world;
-}
-
-bool WorldHit(World world, Ray ray, float t_min, float t_max, inout HitRecord rec)
+bool WorldHit(Ray ray, float t_min, float t_max, inout HitRecord rec)
 {
     HitRecord tmpRec;
     float cloestSoFar = t_max;
     bool hitSomething = false;
 
-    for(int i = 0; i < world.objectCount; ++i)
+    for(int i = 0; i < objectCount; ++i)
     {
-        if(SphereHit(world.objects[i], ray, t_min, cloestSoFar, tmpRec))
+        if(SphereHit(GetSphereFromTexture(i), ray, t_min, cloestSoFar, tmpRec))
         {
             rec = tmpRec;
             cloestSoFar = tmpRec.t;
@@ -386,7 +377,7 @@ bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord
 		{
 			if(world.nodes[curr].objectIndex != -1)
 			{
-				if(SphereHit(world.objects[world.nodes[curr].objectIndex],ray, t_min,cloestSoFar,tmpRec))
+				if(SphereHit(GetSphereFromTexture(world.nodes[curr].objectIndex),ray, t_min,cloestSoFar,tmpRec))
 				{
 					rec = tmpRec;
 					cloestSoFar = tmpRec.t;
@@ -422,7 +413,7 @@ bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord
     return hitSomething;
 }
 
-vec3 WorldTrace(World world, Ray ray, int depth)
+vec3 WorldTrace(Ray ray, int depth)
 {
     HitRecord hitRecord;
 
@@ -431,12 +422,12 @@ vec3 WorldTrace(World world, Ray ray, int depth)
 	while(depth>0)
 	{
 		depth--;
-		// if(WorldHit(world, ray, 0.001, RAYCAST_MAX, hitRecord))
-		if(WorldHitBVH(world, ray, 0.001, RAYCAST_MAX, hitRecord))
+		if(WorldHit(ray, 0.001, RAYCAST_MAX, hitRecord))
+		// if(WorldHitBVH(world, ray, 0.001, RAYCAST_MAX, hitRecord))
 		{
 			Ray scatterRay;
 			vec3 attenuation;
-			if(!MaterialScatter(hitRecord.materialType, hitRecord.material, ray, hitRecord, scatterRay, attenuation))
+			if(!MaterialScatter(ray, hitRecord, scatterRay, attenuation))
 				break;
 			
 			frac *= attenuation;
@@ -480,9 +471,9 @@ Lambertian LambertianConstructor(vec3 albedo)
 	return lambertian;
 }
 
-bool LambertianScatter(in Lambertian lambertian, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
+bool LambertianScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
 {
-	attenuation = lambertian.albedo;
+	attenuation = hitRecord.material.color;
 
 	scattered.origin = hitRecord.position;
 	scattered.direction = hitRecord.normal + RandInSphere();
@@ -500,9 +491,9 @@ Metallic MetallicConstructor(vec3 albedo, float roughness)
 	return metallic;
 }
 
-bool MetallicScatter(in Metallic metallic, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
+bool MetallicScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
 {
-	attenuation = metallic.albedo;
+	attenuation = hitRecord.material.color;
 
 	scattered.origin = hitRecord.position;
 	scattered.direction = reflect(incident.direction, hitRecord.normal);
@@ -521,9 +512,9 @@ Dielectric DielectricConstructor(vec3 albedo, float roughness, float ior)
 	return dielectric;
 }
 
-bool DielectricScatter1(in Dielectric dielectric, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
+bool DielectricScatter1(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
 {
-	attenuation = dielectric.albedo;
+	attenuation = hitRecord.material.color;
 	vec3 reflected = reflect(incident.direction, hitRecord.normal);
 
 	vec3 outward_normal;
@@ -531,12 +522,12 @@ bool DielectricScatter1(in Dielectric dielectric, in Ray incident, in HitRecord 
 	if(dot(incident.direction, hitRecord.normal) > 0.0)// hit from inside
 	{
 		outward_normal = -hitRecord.normal;
-		ni_over_nt = dielectric.ior;
+		ni_over_nt = hitRecord.material.ior;
 	}
 	else // hit from outside
 	{
 		outward_normal = hitRecord.normal;
-		ni_over_nt = 1.0 / dielectric.ior;
+		ni_over_nt = 1.0 / hitRecord.material.ior;
 	}
 
 	vec3 refracted;
@@ -554,9 +545,9 @@ bool DielectricScatter1(in Dielectric dielectric, in Ray incident, in HitRecord 
 	}
 }
 
-bool DielectricScatter2(in Dielectric dielectric, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
+bool DielectricScatter2(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
 {
-	attenuation = dielectric.albedo;
+	attenuation = hitRecord.material.color;
 	vec3 reflected = reflect(incident.direction, hitRecord.normal);
 
 	vec3 outward_normal;
@@ -565,13 +556,13 @@ bool DielectricScatter2(in Dielectric dielectric, in Ray incident, in HitRecord 
 	if(dot(incident.direction, hitRecord.normal) > 0.0)// hit from inside
 	{
 		outward_normal = -hitRecord.normal;
-		ni_over_nt = dielectric.ior;
+		ni_over_nt = hitRecord.material.ior;
 		cosine = dot(incident.direction, hitRecord.normal) / length(incident.direction); // incident angle
 	}
 	else // hit from outside
 	{
 		outward_normal = hitRecord.normal;
-		ni_over_nt = 1.0 / dielectric.ior;
+		ni_over_nt = 1.0 / hitRecord.material.ior;
 		cosine = -dot(incident.direction, hitRecord.normal) / length(incident.direction); // incident angle
 	}
 
@@ -579,7 +570,7 @@ bool DielectricScatter2(in Dielectric dielectric, in Ray incident, in HitRecord 
 	vec3 refracted;
 	if(refract(incident.direction, outward_normal, ni_over_nt, refracted))
 	{
-		reflect_prob = schlick(cosine, dielectric.ior);
+		reflect_prob = schlick(cosine, hitRecord.material.ior);
 	}
 	else
 	{
@@ -598,10 +589,10 @@ bool DielectricScatter2(in Dielectric dielectric, in Ray incident, in HitRecord 
 	return true;
 }
 
-bool DielectricScatter(in Dielectric dielectric, in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
+bool DielectricScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
 {
 	//return DielectricScatter1(dielectric, incident, hitRecord, scattered, attenuation);
-	return DielectricScatter2(dielectric, incident, hitRecord, scattered, attenuation);
+	return DielectricScatter2(incident, hitRecord, scattered, attenuation);
 }
 
 float schlick(float cosine, float ior)
@@ -630,14 +621,14 @@ bool refract(vec3 v, vec3 n, float ni_over_nt, out vec3 refracted)
 		return false;
 }
 
-bool MaterialScatter(in int materialType, in int material, in Ray incident, in HitRecord hitRecord, out Ray scatter, out vec3 attenuation)
+bool MaterialScatter(in Ray incident, in HitRecord hitRecord, out Ray scatter, out vec3 attenuation)
 {
-    if(materialType==MAT_LAMBERTIAN)
-		return LambertianScatter(lambertMaterials[material], incident, hitRecord, scatter, attenuation);
-	else if(materialType==MAT_METALLIC)
-		return MetallicScatter(metallicMaterials[material], incident, hitRecord, scatter, attenuation);
-	else if(materialType==MAT_DIELECTRIC)
-		return DielectricScatter(dielectricMaterials[material], incident, hitRecord, scatter, attenuation);
+    if(hitRecord.material.materialType==MAT_LAMBERTIAN)
+		return LambertianScatter(incident, hitRecord, scatter, attenuation);
+	else if(hitRecord.material.materialType==MAT_METALLIC)
+		return MetallicScatter(incident, hitRecord, scatter, attenuation);
+	else if(hitRecord.material.materialType==MAT_DIELECTRIC)
+		return DielectricScatter(incident, hitRecord, scatter, attenuation);
 	else
 		return false;
 }
@@ -682,32 +673,6 @@ AABB SurroundingBox(AABB box1, AABB box2)
 					max(box1.maximum[1], box2.maximum[1]),
 					max(box1.maximum[2], box2.maximum[2]));
 	return ab;
-}
-
-void SortAABB(inout World world, int start, int end, int axis)
-{
-	AABB aabb;
-	Sphere sphere;
-	if(end > world.objectCount)
-	{
-		end = world.objectCount;
-	}
-	for(int i = start; i < end - 1 ; ++i)
-	{
-		for(int j = start; j < end - i + start -1; ++j)
-		{
-			if(world.aabbs[j].minimum[axis] > world.aabbs[j+1].minimum[axis])
-			{
-				aabb = world.aabbs[j];
-				world.aabbs[j] = world.aabbs[j+1];
-				world.aabbs[j+1] = aabb;
-
-				sphere = world.objects[j];
-				world.objects[j] = world.objects[j+1];
-				world.objects[j+1] = sphere;
-			}
-		}
-	}
 }
 
 void SortAABBBefore(inout World world)
@@ -765,44 +730,18 @@ void BVHNodeConstruct(inout World world)
 	}
 }
 
-
-
-void InitScene()
-{
-	// vec3 lookFrom = vec3(-2.0, 2.0, 1.0);
-	// vec3 lookAt = vec3(0.0, 0.0, -1.0);
-	// vec3 vup = vec3(0.0, 1.0, 0.0);
-	world = WorldConstructor();
-	camera = CameraConstructor(cameraParameter.lookFrom, cameraParameter.lookAt, cameraParameter.vup, 20.0, cameraParameter.aspectRatio);
-
-	lambertMaterials[0] = LambertianConstructor(vec3(0.5, 0.5, 0.5));
-	lambertMaterials[1] = LambertianConstructor(vec3(0.4, 0.2, 0.1));
-	lambertMaterials[2] = LambertianConstructor(vec3(0.5, 0.5, 0.7));
-	lambertMaterials[3] = LambertianConstructor(vec3(0.8, 0.8, 0.0));
-
-	metallicMaterials[0] = MetallicConstructor(vec3(0.7, 0.6, 0.5), 0.0);
-	metallicMaterials[1] = MetallicConstructor(vec3(0.5, 0.7, 0.5), 0.1);
-	metallicMaterials[2] = MetallicConstructor(vec3(0.5, 0.5, 0.7), 0.2);
-	metallicMaterials[3] = MetallicConstructor(vec3(0.7, 0.7, 0.7), 0.3);
-
-	dielectricMaterials[0] = DielectricConstructor(vec3(1.0, 1.0, 1.0), 0.0, 1.5);
-	dielectricMaterials[1] = DielectricConstructor(vec3(1.0, 1.0, 1.0), 0.1, 1.5);
-	dielectricMaterials[2] = DielectricConstructor(vec3(1.0, 1.0, 1.0), 0.2, 1.5);
-	dielectricMaterials[3] = DielectricConstructor(vec3(1.0, 1.0, 1.0), 0.3, 1.5);
-}
-
 // main function
 // -------------
 void main()
 {
-	InitScene();
-	BVHNodeConstruct(world);
+	camera = CameraConstructor(cameraParameter.lookFrom, cameraParameter.lookAt, cameraParameter.vup, 20.0, cameraParameter.aspectRatio);
+	// BVHNodeConstruct(world);
 	vec3 col = vec3(0.0, 0.0, 0.0);
 	int ns = 100;
 	for(int i=0; i<ns; i++)
 	{
 		Ray ray = CameraGetRay(camera, screenCoord + RandInSquare() / screenSize);
-		col += WorldTrace(world, ray, 50);
+		col += WorldTrace(ray, 50);
 	}
 	col /= ns;
 

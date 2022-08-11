@@ -9,10 +9,10 @@
 
 #include "aabb.h"
 
-class hittable
+class Hittable
 {
 public:
-    virtual bool bounding_box(aabb& output_box) const = 0;
+    virtual bool bounding_box(AABB& output_box) const = 0;
 };
 
 #endif //RAYTRACING_HITTABLE_H

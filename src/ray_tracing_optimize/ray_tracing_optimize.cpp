@@ -24,12 +24,17 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 unsigned int loadTexture(const char* path);
 unsigned int loadCubemap(std::vector<std::string> faces);
-void SortSpheres(std::vector<sphere>& spheres);
+void SortSpheres(std::vector<Sphere>& spheres);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 const unsigned int BIG_DATA_SIZE = 1000;
+
+const int MAT_LAMBERTIAN = 0;
+const int MAT_METALLIC =  1;
+const int MAT_DIELECTRIC = 2;
+const int MAT_PBR =  3;
 
 Camera camera(glm::vec3(-5.0f, 4.0f, 4.0f));
 float lastX = SCR_WIDTH / 2.0f;
@@ -41,8 +46,8 @@ float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 // spheres
-std::vector<sphere> spheres;
-float *spheresData = new float[BIG_DATA_SIZE];
+std::vector<Sphere> spheres;
+float (*spheresData)[4] = new float[BIG_DATA_SIZE][4];
 
 // void 
 int main()
@@ -155,9 +160,10 @@ int main()
         shader.setVec3("cameraParameter.vup", camera.WorldUp);
         shader.setFloat("cameraParameter.vfov", 20.0);
         shader.setFloat("cameraParameter.aspectRatio", (float)SCR_WIDTH/SCR_HEIGHT);
+        shader.setInt("objectCount", spheres.size());
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_BUFFER, tboSpheresId);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, tboBufferId);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, tboBufferId);
         
 
         glBindVertexArray(VAO);
@@ -302,15 +308,19 @@ unsigned int loadCubemap(std::vector<std::string> faces)
     return textureID;
 }
 
-void SortSpheres(std::vector<sphere>& spheres)
+void SortSpheres(std::vector<Sphere>& spheres)
 {
     static std::default_random_engine e;
     static std::uniform_int_distribution<unsigned> u(0, 2);
 
-    spheres.push_back(sphere(vec3(0.0, -100.5, -1.0), 100.0));
-    spheres.push_back(sphere(vec3(0.0, 0.0, -1.0), 0.5));
-    spheres.push_back(sphere(vec3(-1.0, 0.0, -1.0), 0.5));
-    spheres.push_back(sphere(vec3(1.0, 0.0, -1.0), 0.5));
+    spheres.push_back(Sphere(vec3(0.0, -100.5, -1.0), 100.0, 
+    Material(vec3(0.1, 0.7, 0.6), MAT_LAMBERTIAN)));
+    spheres.push_back(Sphere(vec3(0.0, 0.0, -1.0), 0.5, 
+    Material(vec3(0.5, 0.7, 0.5), MAT_METALLIC)));
+    spheres.push_back(Sphere(vec3(-1.0, 0.0, -1.0), 0.5, 
+    Material(vec3(0.8, 0.8, 0.0), MAT_LAMBERTIAN)));
+    spheres.push_back(Sphere(vec3(1.0, 0.0, -1.0), 0.5, 
+    Material(vec3(0.1, 0.8, 0.4), MAT_LAMBERTIAN)));
 
     unsigned span = 4;
     unsigned start = 0;
@@ -320,8 +330,8 @@ void SortSpheres(std::vector<sphere>& spheres)
         while (start < 3)
         {
             axis = u(e);
-            std::sort(spheres.begin() + start, spheres.begin() + span, [axis](sphere&a,sphere&b){
-                return a.box.minimum[axis] < b.box.minimum[axis];
+            std::sort(spheres.begin() + start, spheres.begin() + span, [axis](Sphere&a,Sphere&b){
+                return a.box.min()[axis] < b.box.min()[axis];
             });
             start += span;
         }
@@ -329,9 +339,15 @@ void SortSpheres(std::vector<sphere>& spheres)
     }
     for(int i = 0; i < 4; ++i)
     {
-        spheresData[4*i] = spheres[i].center[0];
-        spheresData[4*i+1] = spheres[i].center[1];
-        spheresData[4*i+2] = spheres[i].center[2];
-        spheresData[4*i+3] = spheres[i].radius;
+        spheresData[i*3][0] = spheres[i].center[0];
+        spheresData[i*3][1] = spheres[i].center[1];
+        spheresData[i*3][2] = spheres[i].center[2];
+        spheresData[i*3][3] = spheres[i].radius;
+        spheresData[i*3+1][0] = spheres[i].material.color[0];
+        spheresData[i*3+1][1] = spheres[i].material.color[1];
+        spheresData[i*3+1][2] = spheres[i].material.color[2];
+        spheresData[i*3+1][3] = spheres[i].material.materialType;
+        spheresData[i*3+2][0] = spheres[i].material.roughness;
+        spheresData[i*3+2][0] = spheres[i].material.ior;
     }
 }
