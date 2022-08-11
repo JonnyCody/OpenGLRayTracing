@@ -9,6 +9,8 @@
 #include <learnopengl/camera.h>
 #include <learnopengl/filesystem.h>
 #include <raytracing/sphere.h>
+#include <raytracing/bvh.h>
+#include <raytracing/create_scene.h>
 #include <iostream>
 #include <vector>
 #include <map>
@@ -25,6 +27,8 @@ void processInput(GLFWwindow* window);
 unsigned int loadTexture(const char* path);
 unsigned int loadCubemap(std::vector<std::string> faces);
 void SortSpheres(std::vector<Sphere>& spheres);
+void WriteSpheresData();
+void WriteBVHNodesData();
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -47,7 +51,9 @@ float lastFrame = 0.0f;
 
 // spheres
 std::vector<Sphere> spheres;
+std::vector<BVHNode> BVHNodes;
 float (*spheresData)[4] = new float[BIG_DATA_SIZE][4];
+float (*BVHNodesData)[4] = new float[BIG_DATA_SIZE][4];
 
 // void 
 int main()
@@ -58,7 +64,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    SortSpheres(spheres);
+    
     // window create
     // -------------
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "OpenGLRayTracing", NULL, NULL);
@@ -117,16 +123,26 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
+    // create tbo data
+    // ---------------
+    spheres = Scene1();
+    SortSpheres(spheres);
+    WriteSpheresData();
+    WriteBVHNodesData();
+
     // generate buffer texture
     // -----------------------
-    unsigned int tboSpheresId, tboBufferId;
-    glGenTextures(1, &tboSpheresId);
-    glGenBuffers(1, &tboBufferId);
-    glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId);
-    glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE, spheresData, GL_STATIC_DRAW);
+    unsigned int tboSpheresId[2], tboBufferId[2];
+    glGenTextures(2, tboSpheresId);
+    glGenBuffers(2, tboBufferId);
+    glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId[0]);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE * 4, spheresData, GL_STATIC_DRAW);
+    glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId[1]);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE * 4, BVHNodesData, GL_STATIC_DRAW);
 
     shader.use();
     shader.setInt("spheresData", 0);
+    shader.setInt("BVHNodesData", 1);
 
     // render loop
     // -----------
@@ -160,12 +176,15 @@ int main()
         shader.setVec3("cameraParameter.vup", camera.WorldUp);
         shader.setFloat("cameraParameter.vfov", 20.0);
         shader.setFloat("cameraParameter.aspectRatio", (float)SCR_WIDTH/SCR_HEIGHT);
-        shader.setInt("objectCount", spheres.size());
+        shader.setInt("world.objectCount", spheres.size());
+        shader.setInt("world.nodesHead", BVHNodes.size() - 1);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_BUFFER, tboSpheresId);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, tboBufferId);
-        
-
+        glBindTexture(GL_TEXTURE_BUFFER, tboSpheresId[0]);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, tboBufferId[0]);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_BUFFER, tboSpheresId[1]);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, tboBufferId[1]);
+    
         glBindVertexArray(VAO);
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -184,7 +203,9 @@ int main()
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
+    glDeleteBuffers(2, tboBufferId);
     delete [] spheresData;
+    delete [] BVHNodesData;
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
@@ -313,16 +334,7 @@ void SortSpheres(std::vector<Sphere>& spheres)
     static std::default_random_engine e;
     static std::uniform_int_distribution<unsigned> u(0, 2);
 
-    spheres.push_back(Sphere(vec3(0.0, -100.5, -1.0), 100.0, 
-    Material(vec3(0.1, 0.7, 0.6), MAT_LAMBERTIAN)));
-    spheres.push_back(Sphere(vec3(0.0, 0.0, -1.0), 0.5, 
-    Material(vec3(0.5, 0.7, 0.5), MAT_METALLIC)));
-    spheres.push_back(Sphere(vec3(-1.0, 0.0, -1.0), 0.5, 
-    Material(vec3(0.8, 0.8, 0.0), MAT_LAMBERTIAN)));
-    spheres.push_back(Sphere(vec3(1.0, 0.0, -1.0), 0.5, 
-    Material(vec3(0.1, 0.8, 0.4), MAT_LAMBERTIAN)));
-
-    unsigned span = 4;
+    unsigned span = spheres.size();
     unsigned start = 0;
     unsigned axis = 0;
     while(span >= 2)
@@ -337,7 +349,11 @@ void SortSpheres(std::vector<Sphere>& spheres)
         }
         span /= 2;
     }
-    for(int i = 0; i < 4; ++i)
+}
+
+void WriteSpheresData()
+{
+    for(int i = 0; i < spheres.size(); ++i)
     {
         spheresData[i*3][0] = spheres[i].center[0];
         spheresData[i*3][1] = spheres[i].center[1];
@@ -348,6 +364,29 @@ void SortSpheres(std::vector<Sphere>& spheres)
         spheresData[i*3+1][2] = spheres[i].material.color[2];
         spheresData[i*3+1][3] = spheres[i].material.materialType;
         spheresData[i*3+2][0] = spheres[i].material.roughness;
-        spheresData[i*3+2][0] = spheres[i].material.ior;
+        spheresData[i*3+2][1] = spheres[i].material.ior;
+    }
+}
+
+void WriteBVHNodesData()
+{
+    BVHNodes.resize(spheres.size() * 2 - 1);
+    BuildBVHNodes(BVHNodes, spheres);
+    for (int i = 0; i < BVHNodes.size(); ++i)
+    {
+        BVHNodesData[3 * i][0] = BVHNodes[i].aabb.minimum[0];
+        BVHNodesData[3 * i][1] = BVHNodes[i].aabb.minimum[1];
+        BVHNodesData[3 * i][2] = BVHNodes[i].aabb.minimum[2];
+        BVHNodesData[3 * i][3] = BVHNodes[i].objectIndex;
+        BVHNodesData[3 * i + 1][0] = BVHNodes[i].aabb.maximum[0];
+        BVHNodesData[3 * i + 1][1] = BVHNodes[i].aabb.maximum[1];
+        BVHNodesData[3 * i + 1][2] = BVHNodes[i].aabb.maximum[2];
+        BVHNodesData[3 * i + 1][3] = BVHNodes[i].objectType;
+        BVHNodesData[3 * i + 2][0] = BVHNodes[i].left;
+        BVHNodesData[3 * i + 2][1] = BVHNodes[i].right;
+    }
+    for(auto & i:BVHNodes)
+    {
+        std::cout << i.left << " " << i.right << " " << i.parent << " " << i.objectIndex << std::endl;
     }
 }

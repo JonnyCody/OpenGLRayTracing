@@ -14,7 +14,7 @@ in vec2 screenCoord;
 // --------
 uniform vec2 screenSize;
 uniform samplerBuffer spheresData;
-
+uniform samplerBuffer BVHNodesData;
 
 // out variables
 // ------------
@@ -71,9 +71,10 @@ struct AABB
 struct BVHNode
 {
 	AABB aabb;
-	int children[2];
+	int left, right;
 	int parent;
 	int objectIndex;
+	int objectType;
 };
 
 struct HitRecord
@@ -89,12 +90,7 @@ struct World
 {
     int objectCount;
 	int nodesHead;
-    // Sphere spheres[40];
-	AABB aabbs[40];
-	BVHNode nodes[40];
 };
-
-
 
 struct Lambertian
 {
@@ -120,13 +116,9 @@ struct Dielectric
 // ----------------
 uniform float rdSeed[4];
 int rdCnt = 0;
-World world;
 Camera camera;
 uniform CameraParameter cameraParameter;
-uniform int objectCount;
-// Lambertian lambertMaterials[4];
-// Metallic metallicMaterials[4];
-// Dielectric dielectricMaterials[4];
+uniform World world;
 int stack[10];
 int stackTop = -1;
 
@@ -143,9 +135,10 @@ float RayHitSphere(Ray ray, Sphere sphere);
 Camera CameraConstructor(vec3 lookFrom, vec3 lookAt, vec3 vup, float vfov, float aspectRatio);
 Sphere SphereConstructor(vec3 center, float radius, Material material);
 Sphere GetSphereFromTexture(int sphereIndex);
+BVHNode GetBVHNodeFromTexture(int BVHNodeIndex);
 bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord hitRec);
 bool WorldHit(World world, Ray ray, float t_min, float t_max, inout HitRecord rec);
-bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord rec);
+bool WorldHitBVH(Ray ray, float t_min, float t_max, inout HitRecord rec);
 vec3 WorldTrace(Ray ray, int depth);
 Ray CameraGetRay(Camera camera, vec2 uv);
 vec3 GetEnvironmentColor(World world, Ray ray);
@@ -162,11 +155,7 @@ float schlick(float cosine, float ior);
 vec3 reflect(in vec3 incident, in vec3 normal);
 bool refract(vec3 v, vec3 n, float niOverNt, out vec3 refracted);
 bool AABBHit(Ray ray, AABB aabb, float tMin, float tMax);
-AABB AABBConstruct(Sphere sphere);
-AABB SurroundingBox(AABB box1, AABB box2);
-void SortAABB(inout World world, int start, int end, int axis);
-void SortAABBBefore(inout World world);
-void BVHNodeConstruct(inout World world);
+
 bool StackEmpty();
 int StackTop();
 void StackPush(int val);
@@ -308,6 +297,23 @@ Sphere GetSphereFromTexture(int sphereIndex)
 	return SphereConstructor(center, radius, tmpMatrial);
 }
 
+BVHNode GetBVHNodeFromTexture(int BVHNodeIndex)
+{
+	vec4 pack;
+	BVHNode node;
+	int index = BVHNodeIndex * 3;
+	pack = texelFetch(BVHNodesData, index);
+	node.aabb.minimum = pack.xyz;
+	node.objectIndex = int(pack.w);
+	pack = texelFetch(BVHNodesData, index + 1);
+	node.aabb.maximum = pack.xyz;
+	node.objectType = int(pack.w);
+	pack = texelFetch(BVHNodesData, index + 2);
+	node.left = int(pack.x);
+	node.right = int(pack.y);
+	return node;
+}
+
 bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord hitRec)
 {
 	vec3 oc = ray.origin - sphere.center;
@@ -352,7 +358,7 @@ bool WorldHit(Ray ray, float t_min, float t_max, inout HitRecord rec)
     float cloestSoFar = t_max;
     bool hitSomething = false;
 
-    for(int i = 0; i < objectCount; ++i)
+    for(int i = 0; i < world.objectCount; ++i)
     {
         if(SphereHit(GetSphereFromTexture(i), ray, t_min, cloestSoFar, tmpRec))
         {
@@ -365,7 +371,7 @@ bool WorldHit(Ray ray, float t_min, float t_max, inout HitRecord rec)
     return hitSomething;
 }
 
-bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord rec)
+bool WorldHitBVH(Ray ray, float t_min, float t_max, inout HitRecord rec)
 {
     HitRecord tmpRec;
     float cloestSoFar = t_max;
@@ -373,11 +379,12 @@ bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord
 	int curr = world.nodesHead;
 	while(curr != -1 || !StackEmpty())
 	{
-		if(AABBHit(ray, world.nodes[curr].aabb,t_min, cloestSoFar))
+		BVHNode curr_node = GetBVHNodeFromTexture(curr);
+		if(AABBHit(ray, curr_node.aabb,t_min, cloestSoFar))
 		{
-			if(world.nodes[curr].objectIndex != -1)
+			if(curr_node.objectIndex != -1)
 			{
-				if(SphereHit(GetSphereFromTexture(world.nodes[curr].objectIndex),ray, t_min,cloestSoFar,tmpRec))
+				if(SphereHit(GetSphereFromTexture(curr_node.objectIndex),ray, t_min,cloestSoFar,tmpRec))
 				{
 					rec = tmpRec;
 					cloestSoFar = tmpRec.t;
@@ -394,8 +401,8 @@ bool WorldHitBVH(World world, Ray ray, float t_min, float t_max, inout HitRecord
 			}
 			else
 			{
-				StackPush(world.nodes[curr].children[1]);
-				curr = world.nodes[curr].children[0];
+				StackPush(curr_node.right);
+				curr = curr_node.left;
 			}
 		}
 		else
@@ -422,8 +429,8 @@ vec3 WorldTrace(Ray ray, int depth)
 	while(depth>0)
 	{
 		depth--;
-		if(WorldHit(ray, 0.001, RAYCAST_MAX, hitRecord))
-		// if(WorldHitBVH(world, ray, 0.001, RAYCAST_MAX, hitRecord))
+		// if(WorldHit(ray, 0.001, RAYCAST_MAX, hitRecord))
+		if(WorldHitBVH(ray, 0.001, RAYCAST_MAX, hitRecord))
 		{
 			Ray scatterRay;
 			vec3 attenuation;
@@ -655,87 +662,11 @@ bool AABBHit(Ray ray, AABB aabb, float tMin, float tMax)
 	return true;
 }
 
-AABB AABBConstruct(Sphere sphere)
-{
-	AABB aabb;
-	aabb.maximum = sphere.center + vec3(sphere.radius, sphere.radius, sphere.radius);
-	aabb.minimum = sphere.center - vec3(sphere.radius, sphere.radius, sphere.radius);
-	return aabb;
-}
-
-AABB SurroundingBox(AABB box1, AABB box2)
-{
-	AABB ab;
-	ab.minimum = vec3(min(box1.minimum[0], box2.minimum[0]),
-					min(box1.minimum[1], box2.minimum[1]),
-					min(box1.minimum[2], box2.minimum[2]));
-	ab.maximum = vec3(max(box1.maximum[0], box2.maximum[0]),
-					max(box1.maximum[1], box2.maximum[1]),
-					max(box1.maximum[2], box2.maximum[2]));
-	return ab;
-}
-
-void SortAABBBefore(inout World world)
-{
-	int span = world.objectCount;
-	int start = 0;
-	int axis = 0;
-	while(span >= 2)
-	{
-		while(start < world.objectCount - 1)
-		{
-			axis = int(Rand()*3)%3;
-			SortAABB(world, start, start + span, axis);
-			start += span;
-		}
-		span/=2;
-	}
-}
-
-void BVHNodeConstruct(inout World world)
-{
-	// SortAABBBefore(world);
-	world.nodesHead = world.objectCount * 2 - 2;
-	int parent = world.objectCount;
-	for(int i = 0; parent <= world.nodesHead; i += 2)
-	{
-		if(i < world.objectCount)
-		{
-			world.nodes[i].aabb = world.aabbs[i];
-			world.nodes[i].children[0] = world.nodes[i].children[1] = -1;
-			world.nodes[i].parent = parent;
-			world.nodes[i].objectIndex = i;
-			if((i+1) < world.objectCount)
-			{
-				world.nodes[i + 1].aabb = world.aabbs[i + 1];
-				world.nodes[i + 1].children[0] = world.nodes[i+1].children[1] = -1;
-				world.nodes[i + 1].parent = parent;
-				world.nodes[i + 1].objectIndex = i + 1;
-			}
-			else
-			{
-				world.nodes[i + 1].parent = parent;
-			}
-		}
-		else
-		{
-			world.nodes[i].parent = parent;
-			world.nodes[i + 1].parent = parent;
-		}
-		world.nodes[parent].aabb = SurroundingBox(world.nodes[i].aabb, world.nodes[i + 1].aabb);
-		world.nodes[parent].children[0] = i;
-		world.nodes[parent].children[1] = i + 1;
-		world.nodes[parent].objectIndex = -1;
-		++parent;
-	}
-}
-
 // main function
 // -------------
 void main()
 {
 	camera = CameraConstructor(cameraParameter.lookFrom, cameraParameter.lookAt, cameraParameter.vup, 20.0, cameraParameter.aspectRatio);
-	// BVHNodeConstruct(world);
 	vec3 col = vec3(0.0, 0.0, 0.0);
 	int ns = 100;
 	for(int i=0; i<ns; i++)
@@ -744,8 +675,6 @@ void main()
 		col += WorldTrace(ray, 50);
 	}
 	col /= ns;
-
-	//col = GammaCorrection(col);
 
 	FragColor.xyz = col;
 	FragColor.w = 1.0;

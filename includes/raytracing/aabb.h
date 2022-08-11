@@ -10,18 +10,22 @@ using point3 = glm::vec3;
 class AABB
 {
 public:
-    
+    AABB(){}
     AABB(const point3& a, const point3& b) {minimum = a; maximum = b;}
-
+    AABB(const AABB& ab)
+    {
+        minimum = ab.minimum;
+        maximum = ab.maximum;
+    }
     point3 min()  {return minimum;}
     point3 max()  {return maximum;}
-private:
+
     point3 minimum;
     point3 maximum;
 
 };
 
-AABB surrounding_box(AABB box0, AABB box1)
+AABB SurroundingBox(AABB box0, AABB box1)
 {
     point3 small(fmin(box0.min()[0], box1.min()[0]),
                  fmin(box0.min()[1], box1.min()[1]),
