@@ -10,7 +10,7 @@
 #include <learnopengl/filesystem.h>
 #include <raytracing/sphere.h>
 #include <raytracing/bvh.h>
-#include <raytracing/create_scene.h>
+#include <raytracing/scene.h>
 #include <iostream>
 #include <vector>
 #include <map>
@@ -33,14 +33,15 @@ void WriteBVHNodesData();
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-const unsigned int BIG_DATA_SIZE = 1000;
+const unsigned int BIG_DATA_SIZE = 10000;
 
 const int MAT_LAMBERTIAN = 0;
 const int MAT_METALLIC =  1;
 const int MAT_DIELECTRIC = 2;
 const int MAT_PBR =  3;
 
-Camera camera(glm::vec3(-5.0f, 4.0f, 4.0f));
+//Camera camera(glm::vec3(-5.0f, 4.0f, 4.0f));
+Camera camera(glm::vec3(13.0f, 2.0f, 3.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -125,7 +126,7 @@ int main()
     
     // create tbo data
     // ---------------
-    spheres = Scene1();
+    RandomScene(spheres);
     SortSpheres(spheres);
     WriteSpheresData();
     WriteBVHNodesData();
@@ -339,9 +340,10 @@ void SortSpheres(std::vector<Sphere>& spheres)
     unsigned axis = 0;
     while(span >= 2)
     {
-        while (start < 3)
+        while (start < spheres.size() - 1)
         {
             axis = u(e);
+            auto end = spheres.begin() + span > spheres.end() ? spheres.end() : spheres.begin() + span;
             std::sort(spheres.begin() + start, spheres.begin() + span, [axis](Sphere&a,Sphere&b){
                 return a.box.min()[axis] < b.box.min()[axis];
             });
@@ -385,8 +387,8 @@ void WriteBVHNodesData()
         BVHNodesData[3 * i + 2][0] = BVHNodes[i].left;
         BVHNodesData[3 * i + 2][1] = BVHNodes[i].right;
     }
-    for(auto & i:BVHNodes)
-    {
-        std::cout << i.left << " " << i.right << " " << i.parent << " " << i.objectIndex << std::endl;
-    }
+    // for(auto & i:BVHNodes)
+    // {
+    //     std::cout << i.left << " " << i.right << " " << i.parent << " " << i.objectIndex << std::endl;
+    // }
 }
