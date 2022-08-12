@@ -6,6 +6,11 @@ const int MAT_LAMBERTIAN = 0;
 const int MAT_METALLIC =  1;
 const int MAT_DIELECTRIC = 2;
 const int MAT_PBR =  3;
+
+const int OBJ_SPHERE = 1;
+const int OBJ_XYRECT = 2;
+const int OBJ_XZRECT = 3;
+const int OBJ_YZRECT = 4;
 // in variables
 // ------------
 in vec2 screenCoord;
@@ -62,6 +67,24 @@ struct Sphere
     Material material;
 }; 
 
+struct XYRect
+{
+	float x0, x1, y0, y1, k;
+    Material material;
+};
+
+struct XZRect
+{
+	float x0, x1, z0, z1, k;
+    Material material;
+};
+
+struct YZRect
+{
+	float y0, y1, z0, z1, k;
+    Material material;
+};
+
 struct AABB
 {
 	vec3 maximum;
@@ -114,12 +137,12 @@ struct Dielectric
 
 // global variables
 // ----------------
-uniform float rdSeed[4];
+float rdSeed[4];
 int rdCnt = 0;
 Camera camera;
 uniform CameraParameter cameraParameter;
 uniform World world;
-int stack[10];
+int stack[30];
 int stackTop = -1;
 
 // functions declaration
@@ -133,12 +156,18 @@ Ray RayConstructor(vec3 origin, vec3 direction);
 vec3 RayGetPointAt(Ray ray, float t);
 float RayHitSphere(Ray ray, Sphere sphere);
 Camera CameraConstructor(vec3 lookFrom, vec3 lookAt, vec3 vup, float vfov, float aspectRatio);
-Sphere SphereConstructor(vec3 center, float radius, Material material);
 Sphere GetSphereFromTexture(int sphereIndex);
+XYRect GetXYRectFromTexture(int xyrectIndex);
+XZRect GetXZRectFromTexture(int xzrectIndex);
+YZRect GetYZRectFromTexture(int yzrectIndex);
 BVHNode GetBVHNodeFromTexture(int BVHNodeIndex);
-bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord hitRec);
-bool WorldHit(World world, Ray ray, float t_min, float t_max, inout HitRecord rec);
-bool WorldHitBVH(Ray ray, float t_min, float t_max, inout HitRecord rec);
+bool SphereHit(Sphere sphere, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
+vec3 SetFaceNormal(Ray ray, vec3 outwardNormal);
+bool XYRectHit(XYRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
+bool XZRectHit(XZRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
+bool YZRectHit(YZRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
+bool WorldHit(World world, Ray ray, float tMin, float tMax, inout HitRecord rec);
+bool WorldHitBVH(Ray ray, float tMin, float tMax, inout HitRecord rec);
 vec3 WorldTrace(Ray ray, int depth);
 Ray CameraGetRay(Camera camera, vec2 uv);
 vec3 GetEnvironmentColor(World world, Ray ray);
@@ -160,27 +189,7 @@ bool StackEmpty();
 int StackTop();
 void StackPush(int val);
 int StackPop();
-bool StackEmpty()
-{
-	return stackTop == -1;
-}
 
-int StackTop()
-{
-	return stack[stackTop];
-
-}
-
-void StackPush(int val)
-{
-	++stackTop;
-	stack[stackTop] = val;
-}
-
-int StackPop()
-{
-	return stack[stackTop--];
-}
 
 // functions definition
 // --------------------
@@ -270,31 +279,89 @@ Camera CameraConstructor(vec3 lookFrom, vec3 lookAt, vec3 vup, float vfov, float
 	return camera;
 }
 
-Sphere SphereConstructor(vec3 center, float radius, Material material)
-{
-	Sphere sphere;
-
-	sphere.center = center;
-	sphere.radius = radius;
-    sphere.material = material;
-	return sphere;
-}
-
 Sphere GetSphereFromTexture(int sphereIndex)
 {
 	Material tmpMatrial;
+	Sphere sphere;
 	vec4 pack;
 	int index = sphereIndex*3;
 	pack = texelFetch(spheresData, index);
-	vec3 center = pack.xyz;
-	float radius = pack.w;
+	sphere.center = pack.xyz;
+	sphere.radius = pack.w;
 	pack = texelFetch(spheresData, index + 1);
 	tmpMatrial.color = pack.xyz;
 	tmpMatrial.materialType = int(pack.w);
 	pack = texelFetch(spheresData, index + 2);
 	tmpMatrial.roughness = pack.x;
 	tmpMatrial.ior = pack.y;
-	return SphereConstructor(center, radius, tmpMatrial);
+	sphere.material = tmpMatrial;
+	return sphere;
+}
+
+XYRect GetXYRectFromTexture(int xyrectIndex)
+{
+	XYRect rect;
+	Material tmpMaterial;
+	vec4 pack;
+	int index = xyrectIndex * 3;
+	pack = texelFetch(spheresData, index);
+	rect.x0 = pack.x;
+	rect.x1 = pack.y;
+	rect.y0 = pack.z;
+	rect.y1 = pack.w;
+	pack = texelFetch(spheresData, index + 1);
+	tmpMaterial.color = pack.xyz;
+	rect.k = pack.w;
+	pack = texelFetch(spheresData, index + 2);
+	tmpMaterial.materialType = int(pack.x);
+	tmpMaterial.roughness = pack.y;
+	tmpMaterial.ior = pack.z;
+	rect.material = tmpMaterial;
+	return rect;
+}
+
+XZRect GetXZRectFromTexture(int xzrectIndex)
+{
+	XZRect rect;
+	Material tmpMaterial;
+	vec4 pack;
+	int index = xzrectIndex * 3;
+	pack = texelFetch(spheresData, index);
+	rect.x0 = pack.x;
+	rect.x1 = pack.y;
+	rect.z0 = pack.z;
+	rect.z1 = pack.w;
+	pack = texelFetch(spheresData, index + 1);
+	tmpMaterial.color = pack.xyz;
+	rect.k = pack.w;
+	pack = texelFetch(spheresData, index + 2);
+	tmpMaterial.materialType = int(pack.x);
+	tmpMaterial.roughness = pack.y;
+	tmpMaterial.ior = pack.z;
+	rect.material = tmpMaterial;
+	return rect;
+}
+
+YZRect GetYZRectFromTexture(int yzrectIndex)
+{
+	YZRect rect;
+	Material tmpMaterial;
+	vec4 pack;
+	int index = yzrectIndex * 3;
+	pack = texelFetch(spheresData, index);
+	rect.y0 = pack.x;
+	rect.y1 = pack.y;
+	rect.z0 = pack.z;
+	rect.z1 = pack.w;
+	pack = texelFetch(spheresData, index + 1);
+	tmpMaterial.color = pack.xyz;
+	rect.k = pack.w;
+	pack = texelFetch(spheresData, index + 2);
+	tmpMaterial.materialType = int(pack.x);
+	tmpMaterial.roughness = pack.y;
+	tmpMaterial.ior = pack.z;
+	rect.material = tmpMaterial;
+	return rect;
 }
 
 BVHNode GetBVHNodeFromTexture(int BVHNodeIndex)
@@ -314,7 +381,7 @@ BVHNode GetBVHNodeFromTexture(int BVHNodeIndex)
 	return node;
 }
 
-bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord hitRec)
+bool SphereHit(Sphere sphere, Ray ray, float tMin, float tMax, inout HitRecord hitRec)
 {
 	vec3 oc = ray.origin - sphere.center;
 	
@@ -327,7 +394,7 @@ bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord
 	if(discriminant > 0)
     {
         float temp = (-b - sqrt(discriminant)) / (2.0 * a);
-        if(temp < t_max && temp > t_min)
+        if(temp < tMax && temp > tMin)
         {
             hitRec.t = temp;
             hitRec.position = RayGetPointAt(ray, hitRec.t);
@@ -338,7 +405,7 @@ bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord
         }
 
         temp = (-b + sqrt(discriminant)) / (2.0 * a);
-		if(temp < t_max && temp> t_min)
+		if(temp < tMax && temp> tMin)
 		{
 			hitRec.t = temp;
 			hitRec.position = RayGetPointAt(ray, hitRec.t);
@@ -352,15 +419,88 @@ bool SphereHit(Sphere sphere, Ray ray, float t_min, float t_max, inout HitRecord
     return false;
 }
 
-bool WorldHit(Ray ray, float t_min, float t_max, inout HitRecord rec)
+vec3 SetFaceNormal(Ray ray, vec3 outwardNormal)
+{
+	vec3 normal;
+	normal = dot(ray.direction, outwardNormal) > 0 ? outwardNormal : -outwardNormal;
+	return normal;
+}
+
+bool XYRectHit(XYRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec)
+{
+	float t = (rect.k - ray.origin.z)/ray.direction.z;
+
+	if (t < tMin || t > tMax)
+	{
+		return false;
+	}
+	float x, y;
+	x = ray.origin.x + t * ray.direction.x;
+	y = ray.origin.y + t * ray.direction.y;
+	if(x < rect.x0 || x > rect.x1 || y < rect.y0 || y > rect.y1)
+	{
+		return false;
+	}
+	hitRec.normal = SetFaceNormal(ray, vec3(0.0, 0.0, 1.0));
+	hitRec.t = t;
+	hitRec.position = RayGetPointAt(ray, hitRec.t);
+	hitRec.material = rect.material;
+	return true;
+}
+
+bool XZRectHit(XZRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec)
+{
+	float t = (rect.k - ray.origin.y)/ray.direction.y;
+
+	if (t < tMin || t > tMax)
+	{
+		return false;
+	}
+	float x, z;
+	x = ray.origin.x + t * ray.direction.x;
+	z = ray.origin.z + t * ray.direction.z;
+	if(x < rect.x0 || x > rect.x1 || z < rect.z0 || z > rect.z1)
+	{
+		return false;
+	}
+	hitRec.normal = SetFaceNormal(ray, vec3(0.0, 1.0, 0.0));
+	hitRec.t = t;
+	hitRec.position = RayGetPointAt(ray, hitRec.t);
+	hitRec.material = rect.material;
+	return true;
+}
+
+bool YZRectHit(YZRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec)
+{
+	float t = (rect.k - ray.origin.x)/ray.direction.x;
+
+	if (t < tMin || t > tMax)
+	{
+		return false;
+	}
+	float y, z;
+	y = ray.origin.y + t * ray.direction.y;
+	z = ray.origin.z + t * ray.direction.z;
+	if(y < rect.y0 || y > rect.y1 || z < rect.z0 || z > rect.z1)
+	{
+		return false;
+	}
+	hitRec.normal = SetFaceNormal(ray, vec3(1.0, 0.0, 0.0));
+	hitRec.t = t;
+	hitRec.position = RayGetPointAt(ray, hitRec.t);
+	hitRec.material = rect.material;
+	return true;
+}
+
+bool WorldHit(Ray ray, float tMin, float tMax, inout HitRecord rec)
 {
     HitRecord tmpRec;
-    float cloestSoFar = t_max;
+    float cloestSoFar = tMax;
     bool hitSomething = false;
 
     for(int i = 0; i < world.objectCount; ++i)
     {
-        if(SphereHit(GetSphereFromTexture(i), ray, t_min, cloestSoFar, tmpRec))
+        if(SphereHit(GetSphereFromTexture(i), ray, tMin, cloestSoFar, tmpRec))
         {
             rec = tmpRec;
             cloestSoFar = tmpRec.t;
@@ -371,25 +511,55 @@ bool WorldHit(Ray ray, float t_min, float t_max, inout HitRecord rec)
     return hitSomething;
 }
 
-bool WorldHitBVH(Ray ray, float t_min, float t_max, inout HitRecord rec)
+bool WorldHitBVH(Ray ray, float tMin, float tMax, inout HitRecord rec)
 {
     HitRecord tmpRec;
-    float cloestSoFar = t_max;
+    float cloestSoFar = tMax;
     bool hitSomething = false;
 	int curr = world.nodesHead;
 	while(curr != -1 || !StackEmpty())
 	{
-		BVHNode curr_node = GetBVHNodeFromTexture(curr);
-		if(AABBHit(ray, curr_node.aabb,t_min, cloestSoFar))
+		BVHNode currNode = GetBVHNodeFromTexture(curr);
+		if(AABBHit(ray, currNode.aabb,tMin, cloestSoFar))
 		{
-			if(curr_node.objectIndex != -1)
+			if(currNode.objectIndex != -1)
 			{
-				if(SphereHit(GetSphereFromTexture(curr_node.objectIndex),ray, t_min,cloestSoFar,tmpRec))
+				switch(currNode.objectType)
 				{
-					rec = tmpRec;
-					cloestSoFar = tmpRec.t;
-            		hitSomething = true;
+					case OBJ_SPHERE:
+						if(SphereHit(GetSphereFromTexture(currNode.objectIndex),ray, tMin, cloestSoFar,tmpRec))
+						{
+							rec = tmpRec;
+							cloestSoFar = tmpRec.t;
+							hitSomething = true;
+						}
+					break;
+					case OBJ_XYRECT:
+						if(XYRectHit(GetXYRectFromTexture(currNode.objectIndex), ray, tMin, cloestSoFar,tmpRec))
+						{
+							rec = tmpRec;
+							cloestSoFar = tmpRec.t;
+							hitSomething = true;
+						}
+					break;
+					case OBJ_XZRECT:
+						if(XZRectHit(GetXZRectFromTexture(currNode.objectIndex), ray, tMin, cloestSoFar,tmpRec))
+						{
+							rec = tmpRec;
+							cloestSoFar = tmpRec.t;
+							hitSomething = true;
+						}
+					break;
+					case OBJ_YZRECT:
+						if(YZRectHit(GetYZRectFromTexture(currNode.objectIndex), ray, tMin, cloestSoFar,tmpRec))
+						{
+							rec = tmpRec;
+							cloestSoFar = tmpRec.t;
+							hitSomething = true;
+						}
+					break;
 				}
+				
 				if(StackEmpty())
 				{
 					curr = -1;
@@ -401,8 +571,8 @@ bool WorldHitBVH(Ray ray, float t_min, float t_max, inout HitRecord rec)
 			}
 			else
 			{
-				StackPush(curr_node.right);
-				curr = curr_node.left;
+				StackPush(currNode.right);
+				curr = currNode.left;
 			}
 		}
 		else
@@ -660,6 +830,28 @@ bool AABBHit(Ray ray, AABB aabb, float tMin, float tMax)
 			return false;
 	}
 	return true;
+}
+
+bool StackEmpty()
+{
+	return stackTop == -1;
+}
+
+int StackTop()
+{
+	return stack[stackTop];
+
+}
+
+void StackPush(int val)
+{
+	++stackTop;
+	stack[stackTop] = val;
+}
+
+int StackPop()
+{
+	return stack[stackTop--];
 }
 
 // main function

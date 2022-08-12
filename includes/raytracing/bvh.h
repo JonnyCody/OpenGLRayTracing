@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "aabb.h"
+#include "hittable_list.h"
 #include "sphere.h"
 
 using std::vector;
@@ -30,24 +31,26 @@ public:
     AABB aabb;
 };
 
-void BuildBVHNodes(vector<BVHNode>& BVHNodes, vector<Sphere>& spheres)
+void BuildBVHNodes(vector<BVHNode>& BVHNodes, HittableList& objects)
 {
-    int nodesHead = spheres.size()*2-2;
-    int parent = spheres.size();
+    int nodesHead = objects.size()*2-2;
+    int parent = objects.size();
     for(int i = 0; parent <= nodesHead; i += 2)
     {
-        if( i < spheres.size())
+        if( i < objects.size())
         {
-            spheres[i].bounding_box(BVHNodes[i].aabb);
+            objects[i]->BoundingBox(BVHNodes[i].aabb);
             BVHNodes[i].left = BVHNodes[i].right = -1;
             BVHNodes[i].parent = parent;
             BVHNodes[i].objectIndex = i;
-            if((i + 1) < spheres.size())
+            BVHNodes[i].objectType = objects[i]->objectType;
+            if((i + 1) < objects.size())
             {
-                spheres[i + 1].bounding_box(BVHNodes[i + 1].aabb);
+                objects[i + 1]->BoundingBox(BVHNodes[i + 1].aabb);
                 BVHNodes[i + 1].left = BVHNodes[i].right = -1;
                 BVHNodes[i + 1].parent = parent;
                 BVHNodes[i + 1].objectIndex = i + 1;
+                BVHNodes[i + 1].objectType = objects[i + 1]->objectType;
             }
             else
             {
@@ -64,6 +67,7 @@ void BuildBVHNodes(vector<BVHNode>& BVHNodes, vector<Sphere>& spheres)
         BVHNodes[parent].left = i;
         BVHNodes[parent].right = i + 1;
         BVHNodes[parent].objectIndex = -1;
+        BVHNodes[parent].objectType = -1;
         ++parent;
     }
 }

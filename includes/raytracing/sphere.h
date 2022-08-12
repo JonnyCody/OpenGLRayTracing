@@ -8,24 +8,27 @@
 #include "hittable.h"
 #include "material.h"
 
+extern const int OBJ_SPHERE;
+
 using glm::vec3;
 
 class Sphere : public Hittable
 {
 public:
 
-    Sphere(const vec3& cen, float rad, Material material) : center(cen), radius(rad), material(material), 
-    box(center - vec3(radius, radius, radius),center + vec3(radius, radius, radius)){}
+    Sphere(const vec3& cen, float rad, std::shared_ptr<Material> m) 
+    {
+        center = cen;
+        radius = rad;
+        matPtr = m;
+        box = AABB(center - vec3(radius, radius, radius),center + vec3(radius, radius, radius));
+        objectType = OBJ_SPHERE;
+    } 
 
-    virtual bool bounding_box(AABB& output_box) const override;
-
-    point3 center;
-    float radius;
-    Material material;
-    AABB box;
+    virtual bool BoundingBox(AABB& output_box) const override;
 };
 
-bool Sphere::bounding_box(AABB &output_box) const
+bool Sphere::BoundingBox(AABB &output_box) const
 {
     output_box = AABB(center - vec3(radius, radius, radius),
                       center + vec3(radius, radius, radius));

@@ -11,6 +11,7 @@
 #include <raytracing/sphere.h>
 #include <raytracing/bvh.h>
 #include <raytracing/scene.h>
+#include <raytracing/hittable_list.h>
 #include <iostream>
 #include <vector>
 #include <map>
@@ -26,8 +27,8 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 unsigned int loadTexture(const char* path);
 unsigned int loadCubemap(std::vector<std::string> faces);
-void SortSpheres(std::vector<Sphere>& spheres);
-void WriteSpheresData();
+void SortObjects(HittableList& objects);
+void WriteObjectsData();
 void WriteBVHNodesData();
 
 // settings
@@ -39,9 +40,14 @@ const int MAT_LAMBERTIAN = 0;
 const int MAT_METALLIC =  1;
 const int MAT_DIELECTRIC = 2;
 const int MAT_PBR =  3;
+const int OBJ_SPHERE = 1;
+const int OBJ_XYRECT = 2;
+const int OBJ_XZRECT = 3;
+const int OBJ_YZRECT = 4;
 
 //Camera camera(glm::vec3(-5.0f, 4.0f, 4.0f));
 Camera camera(glm::vec3(13.0f, 2.0f, 3.0f));
+// Camera camera(glm::vec3(278.0f, 278.0f, -800.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -51,7 +57,7 @@ float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 // spheres
-std::vector<Sphere> spheres;
+HittableList objects;
 std::vector<BVHNode> BVHNodes;
 float (*spheresData)[4] = new float[BIG_DATA_SIZE][4];
 float (*BVHNodesData)[4] = new float[BIG_DATA_SIZE][4];
@@ -126,9 +132,10 @@ int main()
     
     // create tbo data
     // ---------------
-    RandomScene(spheres);
-    SortSpheres(spheres);
-    WriteSpheresData();
+    RandomScene(objects);
+    // CornellBox(objects);
+    SortObjects(objects);
+    WriteObjectsData();
     WriteBVHNodesData();
 
     // generate buffer texture
@@ -177,7 +184,7 @@ int main()
         shader.setVec3("cameraParameter.vup", camera.WorldUp);
         shader.setFloat("cameraParameter.vfov", 20.0);
         shader.setFloat("cameraParameter.aspectRatio", (float)SCR_WIDTH/SCR_HEIGHT);
-        shader.setInt("world.objectCount", spheres.size());
+        shader.setInt("world.objectCount", objects.size());
         shader.setInt("world.nodesHead", BVHNodes.size() - 1);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_BUFFER, tboSpheresId[0]);
@@ -330,22 +337,22 @@ unsigned int loadCubemap(std::vector<std::string> faces)
     return textureID;
 }
 
-void SortSpheres(std::vector<Sphere>& spheres)
+void SortObjects(HittableList& objects)
 {
     static std::default_random_engine e;
     static std::uniform_int_distribution<unsigned> u(0, 2);
 
-    unsigned span = spheres.size();
+    unsigned span = objects.size();
     unsigned start = 0;
     unsigned axis = 0;
     while(span >= 2)
     {
-        while (start < spheres.size() - 1)
+        while (start < objects.size() - 1)
         {
             axis = u(e);
-            auto end = spheres.begin() + span > spheres.end() ? spheres.end() : spheres.begin() + span;
-            std::sort(spheres.begin() + start, spheres.begin() + span, [axis](Sphere&a,Sphere&b){
-                return a.box.min()[axis] < b.box.min()[axis];
+            auto end = objects.begin() + span > objects.end() ? objects.end() : objects.begin() + span;
+            std::sort(objects.begin() + start, objects.begin() + span, [axis](std::shared_ptr<Hittable> a,std::shared_ptr<Hittable>b){
+                return a->box.min()[axis] < b->box.min()[axis];
             });
             start += span;
         }
@@ -353,27 +360,73 @@ void SortSpheres(std::vector<Sphere>& spheres)
     }
 }
 
-void WriteSpheresData()
+void WriteObjectsData()
 {
-    for(int i = 0; i < spheres.size(); ++i)
+    for(int i = 0; i < objects.size(); ++i)
     {
-        spheresData[i*3][0] = spheres[i].center[0];
-        spheresData[i*3][1] = spheres[i].center[1];
-        spheresData[i*3][2] = spheres[i].center[2];
-        spheresData[i*3][3] = spheres[i].radius;
-        spheresData[i*3+1][0] = spheres[i].material.color[0];
-        spheresData[i*3+1][1] = spheres[i].material.color[1];
-        spheresData[i*3+1][2] = spheres[i].material.color[2];
-        spheresData[i*3+1][3] = spheres[i].material.materialType;
-        spheresData[i*3+2][0] = spheres[i].material.roughness;
-        spheresData[i*3+2][1] = spheres[i].material.ior;
+        switch(objects[i]->objectType)
+        {
+            case OBJ_SPHERE:
+                spheresData[i*3][0] = objects[i]->center[0];
+                spheresData[i*3][1] = objects[i]->center[1];
+                spheresData[i*3][2] = objects[i]->center[2];
+                spheresData[i*3][3] = objects[i]->radius;
+                spheresData[i*3+1][0] = objects[i]->matPtr->color[0];
+                spheresData[i*3+1][1] = objects[i]->matPtr->color[1];
+                spheresData[i*3+1][2] = objects[i]->matPtr->color[2];
+                spheresData[i*3+1][3] = objects[i]->matPtr->materialType;
+                spheresData[i*3+2][0] = objects[i]->matPtr->roughness;
+                spheresData[i*3+2][1] = objects[i]->matPtr->ior;
+            break;
+            case OBJ_XYRECT:
+                spheresData[i*3][0] = objects[i]->x0;
+                spheresData[i*3][1] = objects[i]->x1;
+                spheresData[i*3][2] = objects[i]->y0;
+                spheresData[i*3][3] = objects[i]->y1;
+                spheresData[i*3+1][0] = objects[i]->matPtr->color[0];
+                spheresData[i*3+1][1] = objects[i]->matPtr->color[1];
+                spheresData[i*3+1][2] = objects[i]->matPtr->color[2];
+                spheresData[i*3+1][3] = objects[i]->k;
+                spheresData[i*3+2][0] = objects[i]->matPtr->materialType;
+                spheresData[i*3+2][1] = objects[i]->matPtr->roughness;
+                spheresData[i*3+2][2] = objects[i]->matPtr->ior;
+                
+            break;
+            case OBJ_XZRECT:
+                spheresData[i*3][0] = objects[i]->x0;
+                spheresData[i*3][1] = objects[i]->x1;
+                spheresData[i*3][2] = objects[i]->z0;
+                spheresData[i*3][3] = objects[i]->z1;
+                spheresData[i*3+1][0] = objects[i]->matPtr->color[0];
+                spheresData[i*3+1][1] = objects[i]->matPtr->color[1];
+                spheresData[i*3+1][2] = objects[i]->matPtr->color[2];
+                spheresData[i*3+1][3] = objects[i]->k;
+                spheresData[i*3+2][0] = objects[i]->matPtr->materialType;
+                spheresData[i*3+2][1] = objects[i]->matPtr->roughness;
+                spheresData[i*3+2][2] = objects[i]->matPtr->ior;
+            break;
+            case OBJ_YZRECT:
+                spheresData[i*3][0] = objects[i]->y0;
+                spheresData[i*3][1] = objects[i]->y1;
+                spheresData[i*3][2] = objects[i]->z0;
+                spheresData[i*3][3] = objects[i]->z1;
+                spheresData[i*3+1][0] = objects[i]->matPtr->color[0];
+                spheresData[i*3+1][1] = objects[i]->matPtr->color[1];
+                spheresData[i*3+1][2] = objects[i]->matPtr->color[2];
+                spheresData[i*3+1][3] = objects[i]->k;
+                spheresData[i*3+2][0] = objects[i]->matPtr->materialType;
+                spheresData[i*3+2][1] = objects[i]->matPtr->roughness;
+                spheresData[i*3+2][2] = objects[i]->matPtr->ior;
+            break;
+        }
+        
     }
 }
 
 void WriteBVHNodesData()
 {
-    BVHNodes.resize(spheres.size() * 2 - 1);
-    BuildBVHNodes(BVHNodes, spheres);
+    BVHNodes.resize(objects.size() * 2 - 1);
+    BuildBVHNodes(BVHNodes, objects);
     for (int i = 0; i < BVHNodes.size(); ++i)
     {
         BVHNodesData[3 * i][0] = BVHNodes[i].aabb.minimum[0];
