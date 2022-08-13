@@ -2,10 +2,12 @@
 
 #define PI 3.14159265
 const float RAYCAST_MAX = 100000.0;
+const float EPSILON = 9.999999747e-06F;
 const int MAT_LAMBERTIAN = 0;
 const int MAT_METALLIC =  1;
 const int MAT_DIELECTRIC = 2;
 const int MAT_PBR =  3;
+const int MAT_TEXTURE = 4;
 
 const int OBJ_SPHERE = 1;
 const int OBJ_XYRECT = 2;
@@ -18,8 +20,11 @@ in vec2 screenCoord;
 // textures
 // --------
 uniform vec2 screenSize;
-uniform samplerBuffer spheresData;
+uniform samplerBuffer objectsData;
 uniform samplerBuffer BVHNodesData;
+uniform samplerBuffer trianglesData;
+
+uniform sampler2D texture_diffuse1;
 
 // out variables
 // ------------
@@ -32,7 +37,14 @@ struct Ray
 {
     vec3 origin;
     vec3 direction;
-}; 
+};
+
+struct Vertex
+{
+	vec3 position;
+	vec3 normal;
+	vec2 texCoords;
+};
 
 struct CameraParameter
 {
@@ -42,6 +54,7 @@ struct CameraParameter
 	float vfov;
 	float aspectRatio;
 };
+
 struct Camera 
 {
     vec3 origin;
@@ -85,6 +98,12 @@ struct YZRect
     Material material;
 };
 
+struct Triangle
+{
+	Vertex a, b, c;
+	Material material;
+};
+
 struct AABB
 {
 	vec3 maximum;
@@ -105,13 +124,14 @@ struct HitRecord
 	float t;
 	vec3 position;
 	vec3 normal;
-
+	float u, v;
     Material material;
 };
 
 struct World
 {
     int objectCount;
+	int triangleCount;
 	int nodesHead;
 };
 
@@ -142,6 +162,7 @@ int rdCnt = 0;
 Camera camera;
 uniform CameraParameter cameraParameter;
 uniform World world;
+Triangle triangle;
 int stack[30];
 int stackTop = -1;
 
@@ -161,12 +182,14 @@ XYRect GetXYRectFromTexture(int xyrectIndex);
 XZRect GetXZRectFromTexture(int xzrectIndex);
 YZRect GetYZRectFromTexture(int yzrectIndex);
 BVHNode GetBVHNodeFromTexture(int BVHNodeIndex);
+Triangle GetTriangleFromTexture(int triangleIndex);
 bool SphereHit(Sphere sphere, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
 vec3 SetFaceNormal(Ray ray, vec3 outwardNormal);
 bool XYRectHit(XYRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
 bool XZRectHit(XZRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
 bool YZRectHit(YZRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
-bool WorldHit(World world, Ray ray, float tMin, float tMax, inout HitRecord rec);
+bool TriangleHit(Triangle tri, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
+bool WorldHit(Ray ray, float tMin, float tMax, inout HitRecord rec);
 bool WorldHitBVH(Ray ray, float tMin, float tMax, inout HitRecord rec);
 vec3 WorldTrace(Ray ray, int depth);
 Ray CameraGetRay(Camera camera, vec2 uv);
@@ -184,7 +207,6 @@ float schlick(float cosine, float ior);
 vec3 reflect(in vec3 incident, in vec3 normal);
 bool refract(vec3 v, vec3 n, float niOverNt, out vec3 refracted);
 bool AABBHit(Ray ray, AABB aabb, float tMin, float tMax);
-
 bool StackEmpty();
 int StackTop();
 void StackPush(int val);
@@ -281,86 +303,78 @@ Camera CameraConstructor(vec3 lookFrom, vec3 lookAt, vec3 vup, float vfov, float
 
 Sphere GetSphereFromTexture(int sphereIndex)
 {
-	Material tmpMatrial;
 	Sphere sphere;
 	vec4 pack;
 	int index = sphereIndex*3;
-	pack = texelFetch(spheresData, index);
+	pack = texelFetch(objectsData, index);
 	sphere.center = pack.xyz;
 	sphere.radius = pack.w;
-	pack = texelFetch(spheresData, index + 1);
-	tmpMatrial.color = pack.xyz;
-	tmpMatrial.materialType = int(pack.w);
-	pack = texelFetch(spheresData, index + 2);
-	tmpMatrial.roughness = pack.x;
-	tmpMatrial.ior = pack.y;
-	sphere.material = tmpMatrial;
+	pack = texelFetch(objectsData, index + 1);
+	sphere.material.color = pack.xyz;
+	sphere.material.materialType = int(pack.w);
+	pack = texelFetch(objectsData, index + 2);
+	sphere.material.roughness = pack.x;
+	sphere.material.ior = pack.y;
 	return sphere;
 }
 
 XYRect GetXYRectFromTexture(int xyrectIndex)
 {
 	XYRect rect;
-	Material tmpMaterial;
 	vec4 pack;
 	int index = xyrectIndex * 3;
-	pack = texelFetch(spheresData, index);
+	pack = texelFetch(objectsData, index);
 	rect.x0 = pack.x;
 	rect.x1 = pack.y;
 	rect.y0 = pack.z;
 	rect.y1 = pack.w;
-	pack = texelFetch(spheresData, index + 1);
-	tmpMaterial.color = pack.xyz;
+	pack = texelFetch(objectsData, index + 1);
+	rect.material.color = pack.xyz;
 	rect.k = pack.w;
-	pack = texelFetch(spheresData, index + 2);
-	tmpMaterial.materialType = int(pack.x);
-	tmpMaterial.roughness = pack.y;
-	tmpMaterial.ior = pack.z;
-	rect.material = tmpMaterial;
+	pack = texelFetch(objectsData, index + 2);
+	rect.material.materialType = int(pack.x);
+	rect.material.roughness = pack.y;
+	rect.material.ior = pack.z;
 	return rect;
 }
 
 XZRect GetXZRectFromTexture(int xzrectIndex)
 {
 	XZRect rect;
-	Material tmpMaterial;
 	vec4 pack;
 	int index = xzrectIndex * 3;
-	pack = texelFetch(spheresData, index);
+	pack = texelFetch(objectsData, index);
 	rect.x0 = pack.x;
 	rect.x1 = pack.y;
 	rect.z0 = pack.z;
 	rect.z1 = pack.w;
-	pack = texelFetch(spheresData, index + 1);
-	tmpMaterial.color = pack.xyz;
+	pack = texelFetch(objectsData, index + 1);
+	rect.material.color = pack.xyz;
 	rect.k = pack.w;
-	pack = texelFetch(spheresData, index + 2);
-	tmpMaterial.materialType = int(pack.x);
-	tmpMaterial.roughness = pack.y;
-	tmpMaterial.ior = pack.z;
-	rect.material = tmpMaterial;
+	pack = texelFetch(objectsData, index + 2);
+	rect.material.materialType = int(pack.x);
+	rect.material.roughness = pack.y;
+	rect.material.ior = pack.z;
 	return rect;
 }
 
 YZRect GetYZRectFromTexture(int yzrectIndex)
 {
 	YZRect rect;
-	Material tmpMaterial;
 	vec4 pack;
 	int index = yzrectIndex * 3;
-	pack = texelFetch(spheresData, index);
+	pack = texelFetch(objectsData, index);
 	rect.y0 = pack.x;
 	rect.y1 = pack.y;
 	rect.z0 = pack.z;
 	rect.z1 = pack.w;
-	pack = texelFetch(spheresData, index + 1);
-	tmpMaterial.color = pack.xyz;
+	pack = texelFetch(objectsData, index + 1);
+	rect.material.color = pack.xyz;
 	rect.k = pack.w;
-	pack = texelFetch(spheresData, index + 2);
-	tmpMaterial.materialType = int(pack.x);
-	tmpMaterial.roughness = pack.y;
-	tmpMaterial.ior = pack.z;
-	rect.material = tmpMaterial;
+	pack = texelFetch(objectsData, index + 2);
+	rect.material.materialType = int(pack.x);
+	rect.material.roughness = pack.y;
+	rect.material.ior = pack.z;
 	return rect;
 }
 
@@ -379,6 +393,37 @@ BVHNode GetBVHNodeFromTexture(int BVHNodeIndex)
 	node.left = int(pack.x);
 	node.right = int(pack.y);
 	return node;
+}
+
+Triangle GetTriangleFromTexture(int triangleIndex)
+{
+	Triangle tri;
+
+	int index = triangleIndex * 6;
+	vec4 pack = texelFetch(trianglesData, index);
+	tri.a.position = pack.xyz;
+	tri.a.texCoords.x = pack.w;
+	pack = texelFetch(trianglesData, index + 1);
+	tri.a.normal = pack.xyz;
+	tri.a.texCoords.y = pack.w;
+
+	pack = texelFetch(trianglesData, index + 2);
+	tri.b.position = pack.xyz;
+	tri.b.texCoords.x = pack.w;
+	pack = texelFetch(trianglesData, index + 3);
+	tri.b.normal = pack.xyz;
+	tri.b.texCoords.y = pack.w;
+
+	pack = texelFetch(trianglesData, index + 4);
+	tri.c.position = pack.xyz;
+	tri.c.texCoords.x = pack.w;
+	pack = texelFetch(trianglesData, index + 5);
+	tri.c.normal = pack.xyz;
+	tri.c.texCoords.y = pack.w;
+
+	tri.material.color = vec3(0.65, 0.05, 0.05);
+	tri.material.materialType = MAT_TEXTURE;
+	return tri;
 }
 
 bool SphereHit(Sphere sphere, Ray ray, float tMin, float tMax, inout HitRecord hitRec)
@@ -492,15 +537,41 @@ bool YZRectHit(YZRect rect, Ray ray, float tMin, float tMax, inout HitRecord hit
 	return true;
 }
 
+bool TriangleHit(Triangle tri, Ray ray, float tMin, float tMax, inout HitRecord hitRec)
+{
+	mat3 equationA = mat3(vec3(tri.a.position - tri.b.position), vec3(tri.a.position - tri.c.position), ray.direction);
+	if(abs(determinant(equationA)) < EPSILON)
+		return false;
+	vec3 equationB = tri.a.position - ray.origin;
+	vec3 equationX = inverse(equationA) * equationB;
+	float alpha = 1 - equationX[0] - equationX[1];
+	vec4 abgt = vec4(alpha, equationX);
+	if(abgt[0] < 0 || abgt[0] > 1
+		|| abgt[1] < 0 || abgt[1] > 1
+		|| abgt[2] < 0 || abgt[2] > 1
+		|| abgt[3] < tMin || abgt[3] > tMax)
+	{
+		return false;
+	}
+	hitRec.t  = abgt[3];
+	hitRec.position = abgt[0] * tri.a.position + abgt[1] * tri.b.position + abgt[2] * tri.c.position;
+	hitRec.u = dot(abgt.xyz, vec3(tri.a.texCoords.x, tri.b.texCoords.x, tri.c.texCoords.x));
+	hitRec.v = dot(abgt.xyz, vec3(tri.a.texCoords.y, tri.b.texCoords.y, tri.c.texCoords.y));
+	hitRec.normal = abgt[0]*tri.a.normal + abgt[1]*tri.b.normal + abgt[2]*tri.c.normal;
+	hitRec.material = tri.material;
+	return true;
+}
+
 bool WorldHit(Ray ray, float tMin, float tMax, inout HitRecord rec)
 {
     HitRecord tmpRec;
     float cloestSoFar = tMax;
     bool hitSomething = false;
 
-    for(int i = 0; i < world.objectCount; ++i)
+    for(int i = 0; i < world.triangleCount; ++i)
     {
-        if(SphereHit(GetSphereFromTexture(i), ray, tMin, cloestSoFar, tmpRec))
+        if(TriangleHit(GetTriangleFromTexture(i), ray, tMin, cloestSoFar, tmpRec))
+		// if(TriangleHit(triangle, ray, tMin, cloestSoFar, tmpRec))
         {
             rec = tmpRec;
             cloestSoFar = tmpRec.t;
@@ -599,8 +670,8 @@ vec3 WorldTrace(Ray ray, int depth)
 	while(depth>0)
 	{
 		depth--;
-		// if(WorldHit(ray, 0.001, RAYCAST_MAX, hitRecord))
-		if(WorldHitBVH(ray, 0.001, RAYCAST_MAX, hitRecord))
+		if(WorldHit(ray, 0.001, RAYCAST_MAX, hitRecord))
+		// if(WorldHitBVH(ray, 0.001, RAYCAST_MAX, hitRecord))
 		{
 			Ray scatterRay;
 			vec3 attenuation;
@@ -772,6 +843,15 @@ bool DielectricScatter(in Ray incident, in HitRecord hitRecord, out Ray scattere
 	return DielectricScatter2(incident, hitRecord, scattered, attenuation);
 }
 
+bool TextureScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
+{
+	attenuation = texture(texture_diffuse1, vec2(hitRecord.u, hitRecord.v)).xyz;
+
+	scattered.origin = hitRecord.position;
+	scattered.direction = hitRecord.normal + RandInSphere();
+	return true;
+}
+
 float schlick(float cosine, float ior)
 {
 	float r0 = (1 - ior) / (1 + ior);
@@ -806,6 +886,8 @@ bool MaterialScatter(in Ray incident, in HitRecord hitRecord, out Ray scatter, o
 		return MetallicScatter(incident, hitRecord, scatter, attenuation);
 	else if(hitRecord.material.materialType==MAT_DIELECTRIC)
 		return DielectricScatter(incident, hitRecord, scatter, attenuation);
+	else if(hitRecord.material.materialType==MAT_TEXTURE)
+		return TextureScatter(incident, hitRecord, scatter, attenuation);
 	else
 		return false;
 }
@@ -860,11 +942,11 @@ void main()
 {
 	camera = CameraConstructor(cameraParameter.lookFrom, cameraParameter.lookAt, cameraParameter.vup, 20.0, cameraParameter.aspectRatio);
 	vec3 col = vec3(0.0, 0.0, 0.0);
-	int ns = 100;
+	int ns = 10;
 	for(int i=0; i<ns; i++)
 	{
 		Ray ray = CameraGetRay(camera, screenCoord + RandInSquare() / screenSize);
-		col += WorldTrace(ray, 50);
+		col += WorldTrace(ray, 10);
 	}
 	col /= ns;
 

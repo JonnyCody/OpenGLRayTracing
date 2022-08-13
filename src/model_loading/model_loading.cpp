@@ -8,6 +8,7 @@
 #include <learnopengl/shader_m.h>
 #include <learnopengl/camera.h>
 #include <learnopengl/filesystem.h>
+#include <learnopengl/model.h>
 #include <raytracing/sphere.h>
 #include <raytracing/bvh.h>
 #include <raytracing/scene.h>
@@ -18,8 +19,6 @@
 #include <iostream>
 #include <random>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn);
@@ -30,11 +29,13 @@ unsigned int loadCubemap(std::vector<std::string> faces);
 void SortObjects(HittableList& objects);
 void WriteObjectsData();
 void WriteBVHNodesData();
+void WriteTrianglesData(Model& m);
+void WriteVerticesIndexData(Model& m);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-const unsigned int BIG_DATA_SIZE = 10000;
+const unsigned int BIG_DATA_SIZE = 100000;
 
 const int MAT_LAMBERTIAN = 0;
 const int MAT_METALLIC =  1;
@@ -45,8 +46,9 @@ const int OBJ_XYRECT = 2;
 const int OBJ_XZRECT = 3;
 const int OBJ_YZRECT = 4;
 
-//Camera camera(glm::vec3(-5.0f, 4.0f, 4.0f));
-Camera camera(glm::vec3(13.0f, 2.0f, 3.0f));
+ //Camera camera(glm::vec3(-5.0f, 4.0f, 4.0f));
+  Camera camera(glm::vec3(13.0f, 2.0f, 3.0f));
+//Camera camera(glm::vec3(0.0f, 0.0f, 0.0f));
 // Camera camera(glm::vec3(278.0f, 278.0f, -800.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
@@ -60,6 +62,7 @@ float lastFrame = 0.0f;
 HittableList objects;
 std::vector<BVHNode> BVHNodes;
 float (*spheresData)[4] = new float[BIG_DATA_SIZE][4];
+float (*triangleData)[4] = new float[BIG_DATA_SIZE][4];
 float (*BVHNodesData)[4] = new float[BIG_DATA_SIZE][4];
 
 // void 
@@ -101,6 +104,14 @@ int main()
     Shader shader(FileSystem::getPath("src/model_loading/model_loading.vs").c_str(),
          FileSystem::getPath("src/model_loading/model_loading.fs").c_str());
 
+    // load models
+      Model model(FileSystem::getPath("resources/objects/rock/rock.obj"));
+    //Model model(FileSystem::getPath("resources/objects/bunny/bunny.obj"));
+     //Model model(FileSystem::getPath("resources/objects/backpack/backpack.obj"));
+    std::cout << model.meshes.size() << endl;
+    std::cout << model.meshes[0].vertices.size() << endl;
+    std::cout << model.meshes[0].indices.size() << endl;
+    //  }
     float vertices[] = 
     {
 			 1.0f,  1.0f, 0.0f,  // top right
@@ -137,20 +148,24 @@ int main()
     SortObjects(objects);
     WriteObjectsData();
     WriteBVHNodesData();
+    WriteTrianglesData(model);
 
     // generate buffer texture
     // -----------------------
-    unsigned int tboSpheresId[2], tboBufferId[2];
-    glGenTextures(2, tboSpheresId);
-    glGenBuffers(2, tboBufferId);
+    unsigned int tboSpheresId[3], tboBufferId[3];
+    glGenTextures(3, tboSpheresId);
+    glGenBuffers(3, tboBufferId);
     glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId[0]);
     glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE * 4, spheresData, GL_STATIC_DRAW);
     glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId[1]);
     glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE * 4, BVHNodesData, GL_STATIC_DRAW);
+    glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId[2]);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE * 4, triangleData, GL_STATIC_DRAW);
 
     shader.use();
     shader.setInt("spheresData", 0);
     shader.setInt("BVHNodesData", 1);
+    shader.setInt("trianglesData", 2);
 
     // render loop
     // -----------
@@ -186,12 +201,17 @@ int main()
         shader.setFloat("cameraParameter.aspectRatio", (float)SCR_WIDTH/SCR_HEIGHT);
         shader.setInt("world.objectCount", objects.size());
         shader.setInt("world.nodesHead", BVHNodes.size() - 1);
+        shader.setInt("world.triangleCount", model.meshes[0].indices.size()/3);
+        // shader.setInt("world.triangleCount", 1);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_BUFFER, tboSpheresId[0]);
         glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, tboBufferId[0]);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_BUFFER, tboSpheresId[1]);
         glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, tboBufferId[1]);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_BUFFER, tboSpheresId[2]);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, tboBufferId[2]);
     
         glBindVertexArray(VAO);
         
@@ -211,8 +231,9 @@ int main()
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
-    glDeleteBuffers(2, tboBufferId);
+    glDeleteBuffers(3, tboBufferId);
     delete [] spheresData;
+    delete [] triangleData;
     delete [] BVHNodesData;
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
@@ -440,8 +461,24 @@ void WriteBVHNodesData()
         BVHNodesData[3 * i + 2][0] = BVHNodes[i].left;
         BVHNodesData[3 * i + 2][1] = BVHNodes[i].right;
     }
-    // for(auto & i:BVHNodes)
-    // {
-    //     std::cout << i.left << " " << i.right << " " << i.parent << " " << i.objectIndex << std::endl;
-    // }
+}
+
+void WriteTrianglesData(Model& m)
+{
+    int triangleIndex = 0;
+    for(int i = 0; i < m.meshes.size(); ++i)
+    {
+        for( int j = 0; j < m.meshes[i].vertices.size(); ++j)
+        {
+            triangleData[triangleIndex][0] = m.meshes[i].vertices[j].Position[0];
+            triangleData[triangleIndex][1] = m.meshes[i].vertices[j].Position[1];
+            triangleData[triangleIndex][2] = m.meshes[i].vertices[j].Position[2];
+            triangleData[triangleIndex][3] = m.meshes[i].vertices[j].TexCoords[0];
+            triangleData[triangleIndex + 1][0] = m.meshes[i].vertices[j].Normal[0];
+            triangleData[triangleIndex + 1][1] = m.meshes[i].vertices[j].Normal[1];
+            triangleData[triangleIndex + 1][2] = m.meshes[i].vertices[j].Normal[2];
+            triangleData[triangleIndex + 1][3] = m.meshes[i].vertices[j].TexCoords[1];
+            triangleIndex+=2;
+        }
+    }
 }
