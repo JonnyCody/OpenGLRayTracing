@@ -45,14 +45,14 @@ void Scene1(HittableList& objects)
 void RandomScene(HittableList& objects)
 {
     
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(0, -1000, 0), 1000,
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(0, -1001, 0), 1000,
     std::make_shared<Material>(Material(vec3(0.5, 0.5, 0.5), MAT_LAMBERTIAN)))));
     for(int a = -11; a < 11; ++a)
     {
         for( int b = -11; b < 11; ++b)
         {
             auto choose_mat = RandomNumber();
-            point3 center(a + 0.9*RandomNumber(), 0.2, b + 0.9*RandomNumber());
+            point3 center(a + 0.9*RandomNumber(), -0.8, b + 0.9*RandomNumber());
 
             if((center - point3(4, 0.2, 0)).length() > 0.9)
             {
@@ -74,11 +74,11 @@ void RandomScene(HittableList& objects)
             }
         }
     }
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(0, 1, 0), 1.0,
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(0, 0, 0), 1.0,
     std::make_shared<Material>(Material(vec3(1.0, 1.0, 1.0), MAT_DIELECTRIC, 0.0, 1.5)))));
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(-4, 1, 0), 1.0, 
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(-4, 0, 0), 1.0, 
     std::make_shared<Material>(Material(vec3(0.4, 0.2, 0.1), MAT_LAMBERTIAN)))));
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(4, 1, 0), 1.0,
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(4, 0, 0), 1.0,
     std::make_shared<Material>(Material(vec3(0.7, 0.6, 0.5), MAT_METALLIC)))));
 }
 

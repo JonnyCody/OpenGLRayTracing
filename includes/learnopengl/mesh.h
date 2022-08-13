@@ -104,7 +104,7 @@ void Mesh::Draw(Shader& shader)
 	unsigned int specularNr = 1;
 	unsigned int normalNr	= 1;
 	unsigned int heightNr	= 1;
-	for (unsigned int i = 0; i < textures.size(); ++i)
+	for (unsigned int i = 4; i < textures.size() + 4; ++i)
 	{
 		glActiveTexture(GL_TEXTURE0 + i);
 		string number;
