@@ -32,6 +32,7 @@ void SortObjects(HittableList& objects);
 void WriteObjectsData();
 void WriteBVHNodesData();
 void WriteTrianglesData(Model& m);
+AABB AABBofModel(Model& m);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -105,7 +106,7 @@ int main()
          FileSystem::getPath("src/ray_tracing_optimize/ray_tracing_optimize.fs").c_str());
 
      Model model(FileSystem::getPath("resources/objects/rock/rock.obj"));
-    //Model model(FileSystem::getPath("resources/objects/bunny/bunny.obj"));
+    // Model model(FileSystem::getPath("resources/objects/bunny/bunny.obj"));
     float vertices[] = 
     {
 			 1.0f,  1.0f, 0.0f,  // top right
@@ -477,4 +478,57 @@ void WriteTrianglesData(Model& m)
             triangleIndex+=2;
         }
     }
+    AABB ab = AABBofModel(m);
+    triangleData[triangleIndex][0] = ab.minimum[0];
+    triangleData[triangleIndex][1] = ab.minimum[1];
+    triangleData[triangleIndex][2] = ab.minimum[2];
+
+    triangleData[triangleIndex+1][0] = ab.maximum[0];
+    triangleData[triangleIndex+1][1] = ab.maximum[1];
+    triangleData[triangleIndex+1][2] = ab.maximum[2];
+}
+
+AABB AABBofModel(Model& m)
+{
+    bool first = true;
+    AABB merge, tri;
+    for(int i = 0; i < m.meshes.size(); ++i)
+    {
+        for(int j = 0; j < m.meshes[i].vertices.size(); j+=3)
+        {
+            if(first)
+            {
+                merge = AABB(vec3(fmin(m.meshes[i].vertices[j].Position[0], 
+                                fmin(m.meshes[i].vertices[j+1].Position[0], m.meshes[i].vertices[j+2].Position[0])),
+                                fmin(m.meshes[i].vertices[j].Position[1], 
+                                fmin(m.meshes[i].vertices[j+1].Position[1], m.meshes[i].vertices[j+2].Position[1])),
+                                fmin(m.meshes[i].vertices[j].Position[2], 
+                                fmin(m.meshes[i].vertices[j+1].Position[2], m.meshes[i].vertices[j+2].Position[2]))), 
+                            vec3(fmax(m.meshes[i].vertices[j].Position[0], 
+                                fmax(m.meshes[i].vertices[j+1].Position[0], m.meshes[i].vertices[j+2].Position[0])),
+                                fmax(m.meshes[i].vertices[j].Position[1], 
+                                fmax(m.meshes[i].vertices[j+1].Position[1], m.meshes[i].vertices[j+2].Position[1])),
+                                fmax(m.meshes[i].vertices[j].Position[2], 
+                                fmax(m.meshes[i].vertices[j+1].Position[2], m.meshes[i].vertices[j+2].Position[2]))));
+                first = false;
+            }
+            else
+            {
+                tri = AABB(vec3(fmin(m.meshes[i].vertices[j].Position[0], 
+                                fmin(m.meshes[i].vertices[j+1].Position[0], m.meshes[i].vertices[j+2].Position[0])),
+                                fmin(m.meshes[i].vertices[j].Position[1], 
+                                fmin(m.meshes[i].vertices[j+1].Position[1], m.meshes[i].vertices[j+2].Position[1])),
+                                fmin(m.meshes[i].vertices[j].Position[2], 
+                                fmin(m.meshes[i].vertices[j+1].Position[2], m.meshes[i].vertices[j+2].Position[2]))), 
+                            vec3(fmax(m.meshes[i].vertices[j].Position[0], 
+                                fmax(m.meshes[i].vertices[j+1].Position[0], m.meshes[i].vertices[j+2].Position[0])),
+                                fmax(m.meshes[i].vertices[j].Position[1], 
+                                fmax(m.meshes[i].vertices[j+1].Position[1], m.meshes[i].vertices[j+2].Position[1])),
+                                fmax(m.meshes[i].vertices[j].Position[2], 
+                                fmax(m.meshes[i].vertices[j+1].Position[2], m.meshes[i].vertices[j+2].Position[2]))));
+                merge = SurroundingBox(merge, tri);
+            }
+        }
+    }
+    return merge;
 }

@@ -159,6 +159,7 @@ struct Dielectric
 float rdSeed[4];
 int rdCnt = 0;
 Camera camera;
+AABB aabbModel;
 uniform CameraParameter cameraParameter;
 uniform World world;
 int stack[30];
@@ -180,6 +181,7 @@ XZRect GetXZRectFromTexture(int xzrectIndex);
 YZRect GetYZRectFromTexture(int yzrectIndex);
 BVHNode GetBVHNodeFromTexture(int BVHNodeIndex);
 Triangle GetTriangleFromTexture(int triangleIndex);
+AABB GetAABBofModelFromTexture();
 bool SphereHit(Sphere sphere, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
 vec3 SetFaceNormal(Ray ray, vec3 outwardNormal);
 bool XYRectHit(XYRect rect, Ray ray, float tMin, float tMax, inout HitRecord hitRec);
@@ -418,6 +420,17 @@ Triangle GetTriangleFromTexture(int triangleIndex)
 	return tri;
 }
 
+AABB GetAABBofModelFromTexture()
+{
+	AABB ab;
+	vec4 pack = texelFetch(trianglesData, world.triangleCount * 6);
+	ab.minimum = pack.xyz;
+	pack = texelFetch(trianglesData, world.triangleCount * 6 + 1);
+	ab.maximum = pack.xyz;
+
+	return ab;
+}
+
 bool SphereHit(Sphere sphere, Ray ray, float tMin, float tMax, inout HitRecord hitRec)
 {
 	vec3 oc = ray.origin - sphere.center;
@@ -556,6 +569,10 @@ bool TriangleHit(Triangle tri, Ray ray, float tMin, float tMax, inout HitRecord 
 
 bool ModelHit(Ray ray, float tMin, float tMax, inout HitRecord rec)
 {
+	if(!AABBHit(ray, aabbModel, tMin, tMax))
+	{
+		return false;
+	}
     HitRecord tmpRec;
     float cloestSoFar = tMax;
     bool hitSomething = false;
@@ -681,8 +698,8 @@ vec3 WorldTrace(Ray ray, int depth)
 	{
 		depth--;
 		// if(SpheresHit(ray, 0.001, RAYCAST_MAX, hitRecord))
-		if(ModelHit(ray, 0.001, RAYCAST_MAX, hitRecord))
-		// if(WorldHitBVH(ray, 0.001, RAYCAST_MAX, hitRecord))
+		// if(ModelHit(ray, 0.001, RAYCAST_MAX, hitRecord))
+		if(WorldHitBVH(ray, 0.001, RAYCAST_MAX, hitRecord)||ModelHit(ray, 0.001, RAYCAST_MAX, hitRecord))
 		{
 			Ray scatterRay;
 			vec3 attenuation;
@@ -941,6 +958,7 @@ int StackPop()
 void main()
 {
 	camera = CameraConstructor(cameraParameter.lookFrom, cameraParameter.lookAt, cameraParameter.vup, 20.0, cameraParameter.aspectRatio);
+	aabbModel = GetAABBofModelFromTexture();
 	vec3 col = vec3(0.0, 0.0, 0.0);
 	int ns = 10;
 	for(int i=0; i<ns; i++)
