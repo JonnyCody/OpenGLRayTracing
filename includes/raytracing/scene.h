@@ -7,6 +7,7 @@
 #include "hittable_list.h"
 
 extern const int MAT_LAMBERTIAN, MAT_METALLIC, MAT_DIELECTRIC;
+extern const int OBJ_MODEL;
 
 inline double RandomNumber()
 {
@@ -32,6 +33,11 @@ vec3 RandomVec3()
 
 void Scene1(HittableList& objects, AABB aabbModel)
 {
+    shared_ptr<Sphere> model = std::make_shared<Sphere>(Sphere(Sphere(vec3(0.0, -101.5, -1.0), 100.0, 
+    std::make_shared<Material>(Material(vec3(0.1, 0.7, 0.6), MAT_LAMBERTIAN)))));
+    model->box = aabbModel;
+    model->objectType = OBJ_MODEL;
+
     objects.add(std::make_shared<Sphere>(Sphere(vec3(0.0, -101.5, -1.0), 100.0, 
     std::make_shared<Material>(Material(vec3(0.1, 0.7, 0.6), MAT_LAMBERTIAN)))));
     objects.add(std::make_shared<Sphere>(Sphere(vec3(0.0, -1.0, -1.0), 0.5, 
@@ -40,6 +46,7 @@ void Scene1(HittableList& objects, AABB aabbModel)
     std::make_shared<Material>(Material(vec3(0.8, 0.8, 0.0), MAT_LAMBERTIAN)))));
     objects.add(std::make_shared<Sphere>(Sphere(vec3(1.0, -1.0, -1.0), 0.5, 
     std::make_shared<Material>(Material(vec3(0.1, 0.8, 0.4), MAT_LAMBERTIAN)))));
+    objects.add(model);
 }
 
 void RandomScene(HittableList& objects)

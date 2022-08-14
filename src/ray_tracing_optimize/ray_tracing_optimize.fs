@@ -705,7 +705,7 @@ vec3 WorldTrace(Ray ray, int depth)
 		depth--;
 		// if(SpheresHit(ray, 0.001, RAYCAST_MAX, hitRecord))
 		// if(ModelHit(ray, 0.001, RAYCAST_MAX, hitRecord))
-		if(WorldHitBVH(ray, 0.001, RAYCAST_MAX, hitRecord)||ModelHit(ray, 0.001, RAYCAST_MAX, hitRecord))
+		if(WorldHitBVH(ray, 0.001, RAYCAST_MAX, hitRecord))//||ModelHit(ray, 0.001, RAYCAST_MAX, hitRecord))
 		{
 			Ray scatterRay;
 			vec3 attenuation;
