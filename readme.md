@@ -12,29 +12,29 @@ typora-copy-images-to: .asset
 
 ### 1.1.1 ray tracing in one week的最终场景
 
-![image-20220814113535210](https://github.com/JonnyCody/OpenGLRayTracing/tree/master/.asset/image-20220814113535210.png)
+![image-20220814113535210](./.asset/image-20220814113535210.png)
 
 ### 1.1.4 加入BVH加速结构前后对比
 
 #### 没有加入BVH
 
-![没有加入BVH](.asset\没有加入BVH.gif)
+![没有加入BVH](./.asset/没有加入BVH.gif)
 
 #### 加入BVH
 
-![加入BVH](.asset\加入BVH.gif)
+![加入BVH](./.asset/加入BVH.gif)
 
 通过两张动图对比，可以发现使用BVH后，镜头移动卡顿减少，在球体少的部分，明显更加丝滑。
 
 ### 1.1.2 导入石头模型
 
-![image-20220814133327701](.asset\image-20220814133327701.png)
+![image-20220814133327701](./.asset/image-20220814133327701.png)
 
 ### 1.1.3 Cornell Box
 
 Cornell box不知为何墙壁和地面的阴影被消除了，从球的反光中可以明显看出地面是有立方体的阴影。
 
-![image-20220814134245565](.asset\image-20220814134245565.png)
+![image-20220814134245565](./.asset/image-20220814134245565.png)
 
 ## 1.2 项目前期依赖
 
