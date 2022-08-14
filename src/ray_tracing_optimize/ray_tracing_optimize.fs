@@ -200,6 +200,7 @@ Lambertian LambertianConstructor(vec3 albedo);
 Metallic MetallicConstructor(vec3 albedo, float roughness);
 bool MetallicScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
 bool LambertianScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
+bool TextureScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
 bool MaterialScatter(in Ray incident, in HitRecord hitRecord, out Ray scatter, out vec3 attenuation);
 Dielectric DielectricConstructor(vec3 albedo, float roughness, float ior);
 bool DielectricScatter1(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation);
@@ -417,8 +418,9 @@ Triangle GetTriangleFromTexture(int triangleIndex)
 	tri.c.normal = pack.xyz;
 	tri.c.texCoords.y = pack.w;
 
-	tri.material.color = vec3(0.65, 0.05, 0.05);
-	tri.material.materialType = MAT_LAMBERTIAN;
+	tri.material.color = vec3(0.75, 0.82, 0.90);
+	tri.material.ior = 7.0;
+	tri.material.materialType = MAT_DIELECTRIC;
 	return tri;
 }
 
@@ -763,6 +765,15 @@ bool LambertianScatter(in Ray incident, in HitRecord hitRecord, out Ray scattere
 	return true;
 }
 
+// bool TextureScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
+// {
+// 	attenuation = texture(texture_diffuse1, vec2(hitRecord.u, hitRecord.v)).xyz;
+
+// 	scattered.origin = hitRecord.position;
+// 	scattered.direction = hitRecord.normal + RandInSphere();
+// 	return true;
+// }
+
 Metallic MetallicConstructor(vec3 albedo, float roughness)
 {
 	Metallic metallic;
@@ -873,7 +884,7 @@ bool DielectricScatter2(in Ray incident, in HitRecord hitRecord, out Ray scatter
 
 bool DielectricScatter(in Ray incident, in HitRecord hitRecord, out Ray scattered, out vec3 attenuation)
 {
-	//return DielectricScatter1(dielectric, incident, hitRecord, scattered, attenuation);
+	// return DielectricScatter1(incident, hitRecord, scattered, attenuation);
 	return DielectricScatter2(incident, hitRecord, scattered, attenuation);
 }
 
@@ -911,6 +922,8 @@ bool MaterialScatter(in Ray incident, in HitRecord hitRecord, out Ray scatter, o
 		return MetallicScatter(incident, hitRecord, scatter, attenuation);
 	else if(hitRecord.material.materialType==MAT_DIELECTRIC)
 		return DielectricScatter(incident, hitRecord, scatter, attenuation);
+	// else if(hitRecord.material.materialType==MAT_TEXTURE)
+	// 	return TextureScatter(incident, hitRecord, scatter, attenuation);
 	else
 		return false;
 }
@@ -966,7 +979,7 @@ void main()
 	camera = CameraConstructor(cameraParameter.lookFrom, cameraParameter.lookAt, cameraParameter.vup, 20.0, cameraParameter.aspectRatio);
 	aabbModel = GetAABBofModelFromTexture();
 	vec3 col = vec3(0.0, 0.0, 0.0);
-	int ns = 10;
+	int ns = 30;
 	for(int i=0; i<ns; i++)
 	{
 		Ray ray = CameraGetRay(camera, screenCoord + RandInSquare() / screenSize);

@@ -35,8 +35,8 @@ void WriteTrianglesData(Model& m);
 AABB AABBofModel(Model& m);
 
 // settings
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+const unsigned int SCR_WIDTH = 1080;
+const unsigned int SCR_HEIGHT = 720;
 const unsigned int BIG_DATA_SIZE = 100000;
 
 const int MAT_LAMBERTIAN = 0;
@@ -209,13 +209,16 @@ int main()
     // create tbo data
     // ---------------
     AABB aabbModel = AABBofModel(model);
-    Scene1(objects, aabbModel);
+    // Scene1(objects, aabbModel);
+    DisplayScene(objects, aabbModel);
     // RandomScene(objects);
     // CornellBox(objects);
     SortObjects(objects);
     WriteObjectsData();
     WriteBVHNodesData();
     WriteTrianglesData(model);
+    cout << aabbModel.minimum[0] << " " << aabbModel.minimum[1] << " " << aabbModel.minimum[2] << endl;
+    cout << aabbModel.maximum[0] << " " << aabbModel.maximum[1] << " " << aabbModel.maximum[2] << endl;
     
     // generate buffer texture
     // -----------------------

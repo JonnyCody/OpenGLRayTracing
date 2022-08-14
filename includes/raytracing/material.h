@@ -11,11 +11,12 @@ class Material
 {
 public:
     Material(const vec3& co, int type, float roughness = 0, float ior = 0):
-    color(co), roughness(roughness), ior(ior), materialType(type){}
+    color(co),materialType(type), roughness(roughness), ior(ior) {}
     vec3 color;
+    int materialType;
     float roughness;
     float ior;
-    int materialType;
+    
 };
 
 #endif

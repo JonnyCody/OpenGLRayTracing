@@ -52,39 +52,43 @@ void Scene1(HittableList& objects, AABB aabbModel)
 void RandomScene(HittableList& objects)
 {
     
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(0, -1001, 0), 1000,
-    std::make_shared<Material>(Material(vec3(0.5, 0.5, 0.5), MAT_LAMBERTIAN)))));
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(0, -1000, 0), 1000,
+    std::make_shared<Material>(Material(vec3(0.1, 0.7, 0.6), MAT_LAMBERTIAN)))));
     for(int a = -11; a < 11; ++a)
     {
         for( int b = -11; b < 11; ++b)
         {
             auto choose_mat = RandomNumber();
-            point3 center(a + 0.9*RandomNumber(), -0.8, b + 0.9*RandomNumber());
+            point3 center(a + 0.9*RandomNumber(), 0.2, b + 0.9*RandomNumber());
 
             if((center - point3(4, 0.2, 0)).length() > 0.9)
             {
-                auto albedo = RandomVec3() * RandomVec3();
-                objects.add(std::make_shared<Sphere>(Sphere(center, 0.2, 
-                std::make_shared<Material>(Material(albedo, MAT_LAMBERTIAN)))));
-            }
-            else if(choose_mat < 0.95)
-            {
-                auto albedo = RandomVec3(0.5, 1.0);
-                auto roughness = RandomNumber(0, 0.5);
-                objects.add(std::make_shared<Sphere>(Sphere(center, 0.2, 
-                std::make_shared<Material>(Material(albedo, MAT_METALLIC)))));
-            }
-            else
-            {
-                objects.add(std::make_shared<Sphere>(Sphere(center, 0.2, 
-                std::make_shared<Material>(Material(vec3(1.5, 1.5, 1.5), MAT_DIELECTRIC, 0.0, 1.5)))));
+                if(choose_mat < 0.8)
+                {
+                    auto albedo = RandomVec3() * RandomVec3();
+                    objects.add(std::make_shared<Sphere>(Sphere(center, 0.2, 
+                    std::make_shared<Material>(Material(albedo, MAT_LAMBERTIAN)))));
+                }
+                else if(choose_mat < 0.95)
+                {
+                    auto albedo = RandomVec3(0.5, 1.0);
+                    auto roughness = RandomNumber(0, 0.2);
+                    objects.add(std::make_shared<Sphere>(Sphere(center, 0.2, 
+                    std::make_shared<Material>(Material(albedo, MAT_METALLIC, roughness)))));
+                }
+                else
+                {
+                    auto albedo = RandomVec3(0.7, 1.0);
+                    objects.add(std::make_shared<Sphere>(Sphere(center, 0.2, 
+                    std::make_shared<Material>(Material(albedo, MAT_DIELECTRIC, 0.0, 1.5)))));
+                }
             }
         }
     }
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(0, 0, 0), 1.0,
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(0, 1, 0), 1.0,
     std::make_shared<Material>(Material(vec3(1.0, 1.0, 1.0), MAT_DIELECTRIC, 0.0, 1.5)))));
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(-4, 0, 0), 1.0, 
-    std::make_shared<Material>(Material(vec3(0.4, 0.2, 0.1), MAT_LAMBERTIAN)))));
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(-4, 1, 0), 1.0, 
+    std::make_shared<Material>(Material(vec3(0.4, 0.8, 0.1), MAT_LAMBERTIAN)))));
     objects.add(std::make_shared<Sphere>(Sphere(vec3(4, 0, 0), 1.0,
     std::make_shared<Material>(Material(vec3(0.7, 0.6, 0.5), MAT_METALLIC)))));
 }
@@ -101,6 +105,24 @@ void CornellBox(HittableList& objects)
     std::make_shared<Material>(Material(vec3(0.73, 0.73, 0.73), MAT_LAMBERTIAN)))));
     objects.add(std::make_shared<XYRect>(XYRect(0, 555, 0, 555, 555, 
     std::make_shared<Material>(Material(vec3(0.73, 0.73, 0.73), MAT_LAMBERTIAN)))));
+}
+
+void DisplayScene(HittableList& objects, AABB aabbModel)
+{
+    shared_ptr<Sphere> model = std::make_shared<Sphere>(Sphere(Sphere(vec3(0.0, -101.5, -1.0), 100.0, 
+    std::make_shared<Material>(Material(vec3(0.1, 0.7, 0.6), MAT_LAMBERTIAN)))));
+    model->box = aabbModel;
+    model->objectType = OBJ_MODEL;
+
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(0.0, -100.0, -0.0), 100.0, 
+    std::make_shared<Material>(Material(vec3(2.0, 2.0, 2.0), MAT_LAMBERTIAN)))));
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(0.0, 1.5, -5), 1.5, 
+    std::make_shared<Material>(Material(vec3(0.5, 0.7, 0.5), MAT_METALLIC)))));
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(-4, 1.5, 3), 1.5, 
+    std::make_shared<Material>(Material(vec3(0.86, 0.1, 0.1), MAT_LAMBERTIAN)))));
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(4, 1.5, 3), 1.5, 
+    std::make_shared<Material>(Material(vec3(0.1, 0.1, 0.8), MAT_LAMBERTIAN)))));
+    objects.add(model);
 }
 
 #endif
