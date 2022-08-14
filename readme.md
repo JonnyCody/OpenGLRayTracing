@@ -12,7 +12,7 @@ typora-copy-images-to: .asset
 
 ### 1.1.1 ray tracing in one week的最终场景
 
-![image-20220814113535210](.asset\image-20220814113535210.png)
+![image-20220814113535210](https://github.com/JonnyCody/OpenGLRayTracing/.asset/image-20220814113535210.png)
 
 ### 1.1.4 加入BVH加速结构前后对比
 
