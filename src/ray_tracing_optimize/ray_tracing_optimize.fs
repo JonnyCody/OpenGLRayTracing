@@ -13,12 +13,14 @@ const int OBJ_SPHERE = 1;
 const int OBJ_XYRECT = 2;
 const int OBJ_XZRECT = 3;
 const int OBJ_YZRECT = 4;
+const int OBJ_MODEL = 5;
 // in variables
 // ------------
 in vec2 screenCoord;
 
 // textures
 // --------
+uniform samplerCube envMap;
 uniform vec2 screenSize;
 uniform samplerBuffer spheresData;
 uniform samplerBuffer BVHNodesData;
@@ -569,10 +571,6 @@ bool TriangleHit(Triangle tri, Ray ray, float tMin, float tMax, inout HitRecord 
 
 bool ModelHit(Ray ray, float tMin, float tMax, inout HitRecord rec)
 {
-	if(!AABBHit(ray, aabbModel, tMin, tMax))
-	{
-		return false;
-	}
     HitRecord tmpRec;
     float cloestSoFar = tMax;
     bool hitSomething = false;
@@ -656,6 +654,14 @@ bool WorldHitBVH(Ray ray, float tMin, float tMax, inout HitRecord rec)
 							hitSomething = true;
 						}
 					break;
+					case OBJ_MODEL:
+						if(ModelHit(ray, 0.001, cloestSoFar, tmpRec))
+						{
+							rec = tmpRec;
+							cloestSoFar = tmpRec.t;
+							hitSomething = true;
+						}
+					break;
 				}
 				
 				if(StackEmpty())
@@ -728,14 +734,14 @@ Ray CameraGetRay(Camera camera, vec2 uv)
 
 vec3 GetEnvironmentColor(World world, Ray ray)
 {
-    vec3 unit_direction = normalize(ray.direction);
-    float t = 0.5 * (unit_direction.y + 1.0);
-    return vec3(1.0, 1.0, 1.0) * (1.0 - t) + vec3(0.5, 0.7, 1.0) * t;
+    // vec3 unit_direction = normalize(ray.direction);
+    // float t = 0.5 * (unit_direction.y + 1.0);
+    // return vec3(1.0, 1.0, 1.0) * (1.0 - t) + vec3(0.5, 0.7, 1.0) * t;
 
-    // vec3 dir = normalize(ray.direction);
-	// float theta = acos(dir.y) / PI;
-	// float phi = (atan(dir.x, dir.z) / (PI) + 1.0) / 2.0;
-	// return texture(envMap, vec2(phi, theta)).xyz;
+    vec3 dir = normalize(ray.direction);
+	float theta = acos(dir.y) / PI;
+	float phi = (atan(dir.x, dir.z) / (PI) + 1.0) / 2.0;
+	return texture(envMap, dir).xyz;
 }
 
 Lambertian LambertianConstructor(vec3 albedo)

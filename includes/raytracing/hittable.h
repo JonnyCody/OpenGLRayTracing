@@ -21,6 +21,7 @@ public:
     std::shared_ptr<Material> matPtr;
     AABB box;
     int objectType;
+    int modelId;
 };
 
 #endif //RAYTRACING_HITTABLE_H

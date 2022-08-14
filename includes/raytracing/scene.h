@@ -30,15 +30,15 @@ vec3 RandomVec3()
     return vec3(RandomNumber(), RandomNumber(), RandomNumber());
 }
 
-void Scene1(HittableList& objects)
+void Scene1(HittableList& objects, AABB aabbModel)
 {
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(0.0, -100.5, -1.0), 100.0, 
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(0.0, -101.5, -1.0), 100.0, 
     std::make_shared<Material>(Material(vec3(0.1, 0.7, 0.6), MAT_LAMBERTIAN)))));
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(0.0, 0.0, -1.0), 0.5, 
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(0.0, -1.0, -1.0), 0.5, 
     std::make_shared<Material>(Material(vec3(0.5, 0.7, 0.5), MAT_METALLIC)))));
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(-1.0, 0.0, -1.0), 0.5, 
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(-1.0, -1.0, -1.0), 0.5, 
     std::make_shared<Material>(Material(vec3(0.8, 0.8, 0.0), MAT_LAMBERTIAN)))));
-    objects.add(std::make_shared<Sphere>(Sphere(vec3(1.0, 0.0, -1.0), 0.5, 
+    objects.add(std::make_shared<Sphere>(Sphere(vec3(1.0, -1.0, -1.0), 0.5, 
     std::make_shared<Material>(Material(vec3(0.1, 0.8, 0.4), MAT_LAMBERTIAN)))));
 }
 

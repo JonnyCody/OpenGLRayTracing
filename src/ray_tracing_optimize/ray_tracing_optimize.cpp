@@ -47,6 +47,7 @@ const int OBJ_SPHERE = 1;
 const int OBJ_XYRECT = 2;
 const int OBJ_XZRECT = 3;
 const int OBJ_YZRECT = 4;
+const int OBJ_MODEL = 5;    
 
 //Camera camera(glm::vec3(-5.0f, 4.0f, 4.0f));
 Camera camera(glm::vec3(13.0f, 2.0f, 3.0f));
@@ -62,7 +63,7 @@ float lastFrame = 0.0f;
 // spheres
 HittableList objects;
 std::vector<BVHNode> BVHNodes;
-float (*spheresData)[4] = new float[BIG_DATA_SIZE][4];
+float (*objectsData)[4] = new float[BIG_DATA_SIZE][4];
 float (*BVHNodesData)[4] = new float[BIG_DATA_SIZE][4];
 float (*triangleData)[4] = new float[BIG_DATA_SIZE][4];
 
@@ -105,7 +106,7 @@ int main()
     Shader shader(FileSystem::getPath("src/ray_tracing_optimize/ray_tracing_optimize.vs").c_str(),
          FileSystem::getPath("src/ray_tracing_optimize/ray_tracing_optimize.fs").c_str());
 
-     Model model(FileSystem::getPath("resources/objects/rock/rock.obj"));
+    Model model(FileSystem::getPath("resources/objects/rock/rock.obj"));
     // Model model(FileSystem::getPath("resources/objects/bunny/bunny.obj"));
     float vertices[] = 
     {
@@ -136,30 +137,103 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
+    float skyboxVertices[] = {
+        // positions          
+        -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        -1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f
+    };
+
+    std::vector<std::string> faces
+    {
+        FileSystem::getPath("resources/textures/skybox/right.jpg"),
+        FileSystem::getPath("resources/textures/skybox/left.jpg"),
+        FileSystem::getPath("resources/textures/skybox/top.jpg"),
+        FileSystem::getPath("resources/textures/skybox/bottom.jpg"),
+        FileSystem::getPath("resources/textures/skybox/front.jpg"),
+        FileSystem::getPath("resources/textures/skybox/back.jpg")
+    };
+
+    // skybox VAO
+    // ----------
+    // skybox VAO
+    unsigned int skyboxVAO, skyboxVBO;
+    glGenVertexArrays(1, &skyboxVAO);
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+    unsigned int cubemapTexture = loadCubemap(faces);
+
     // create tbo data
     // ---------------
-    RandomScene(objects);
+    AABB aabbModel = AABBofModel(model);
+    Scene1(objects, aabbModel);
+    // RandomScene(objects);
     // CornellBox(objects);
     SortObjects(objects);
     WriteObjectsData();
     WriteBVHNodesData();
     WriteTrianglesData(model);
+    
     // generate buffer texture
     // -----------------------
     unsigned int tboSpheresId[3], tboBufferId[3];
     glGenTextures(3, tboSpheresId);
     glGenBuffers(3, tboBufferId);
     glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId[0]);
-    glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE * 4, spheresData, GL_STATIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE * 4, objectsData, GL_STATIC_DRAW);
     glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId[1]);
     glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE * 4, BVHNodesData, GL_STATIC_DRAW);
     glBindBuffer(GL_TEXTURE_BUFFER, tboBufferId[2]);
     glBufferData(GL_TEXTURE_BUFFER, sizeof(float) * BIG_DATA_SIZE * 4, triangleData, GL_STATIC_DRAW);
 
     shader.use();
-    shader.setInt("spheresData", 0);
+    shader.setInt("objectsData", 0);
     shader.setInt("BVHNodesData", 1);
     shader.setInt("trianglesData", 2);
+    shader.setInt("envMap", 3);
 
     // render loop
     // -----------
@@ -209,6 +283,12 @@ int main()
         glBindVertexArray(VAO);
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(skyboxVAO);
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
+        glDepthFunc(GL_LESS);
         
         /*std::cout << camera.Position[0] << " " << camera.Position[1] << " " << camera.Position[2] << std::endl;
         std::cout << camera.Front[0] << " " << camera.Front[1] << " " << camera.Front[2] << std::endl;*/
@@ -225,7 +305,7 @@ int main()
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
     glDeleteBuffers(3, tboBufferId);
-    delete[] spheresData;
+    delete[] objectsData;
     delete[] BVHNodesData;
     delete[] triangleData;
 
@@ -381,56 +461,56 @@ void WriteObjectsData()
         switch(objects[i]->objectType)
         {
             case OBJ_SPHERE:
-                spheresData[i*3][0] = objects[i]->center[0];
-                spheresData[i*3][1] = objects[i]->center[1];
-                spheresData[i*3][2] = objects[i]->center[2];
-                spheresData[i*3][3] = objects[i]->radius;
-                spheresData[i*3+1][0] = objects[i]->matPtr->color[0];
-                spheresData[i*3+1][1] = objects[i]->matPtr->color[1];
-                spheresData[i*3+1][2] = objects[i]->matPtr->color[2];
-                spheresData[i*3+1][3] = objects[i]->matPtr->materialType;
-                spheresData[i*3+2][0] = objects[i]->matPtr->roughness;
-                spheresData[i*3+2][1] = objects[i]->matPtr->ior;
+                objectsData[i*3][0] = objects[i]->center[0];
+                objectsData[i*3][1] = objects[i]->center[1];
+                objectsData[i*3][2] = objects[i]->center[2];
+                objectsData[i*3][3] = objects[i]->radius;
+                objectsData[i*3+1][0] = objects[i]->matPtr->color[0];
+                objectsData[i*3+1][1] = objects[i]->matPtr->color[1];
+                objectsData[i*3+1][2] = objects[i]->matPtr->color[2];
+                objectsData[i*3+1][3] = objects[i]->matPtr->materialType;
+                objectsData[i*3+2][0] = objects[i]->matPtr->roughness;
+                objectsData[i*3+2][1] = objects[i]->matPtr->ior;
             break;
             case OBJ_XYRECT:
-                spheresData[i*3][0] = objects[i]->x0;
-                spheresData[i*3][1] = objects[i]->x1;
-                spheresData[i*3][2] = objects[i]->y0;
-                spheresData[i*3][3] = objects[i]->y1;
-                spheresData[i*3+1][0] = objects[i]->matPtr->color[0];
-                spheresData[i*3+1][1] = objects[i]->matPtr->color[1];
-                spheresData[i*3+1][2] = objects[i]->matPtr->color[2];
-                spheresData[i*3+1][3] = objects[i]->k;
-                spheresData[i*3+2][0] = objects[i]->matPtr->materialType;
-                spheresData[i*3+2][1] = objects[i]->matPtr->roughness;
-                spheresData[i*3+2][2] = objects[i]->matPtr->ior;
+                objectsData[i*3][0] = objects[i]->x0;
+                objectsData[i*3][1] = objects[i]->x1;
+                objectsData[i*3][2] = objects[i]->y0;
+                objectsData[i*3][3] = objects[i]->y1;
+                objectsData[i*3+1][0] = objects[i]->matPtr->color[0];
+                objectsData[i*3+1][1] = objects[i]->matPtr->color[1];
+                objectsData[i*3+1][2] = objects[i]->matPtr->color[2];
+                objectsData[i*3+1][3] = objects[i]->k;
+                objectsData[i*3+2][0] = objects[i]->matPtr->materialType;
+                objectsData[i*3+2][1] = objects[i]->matPtr->roughness;
+                objectsData[i*3+2][2] = objects[i]->matPtr->ior;
                 
             break;
             case OBJ_XZRECT:
-                spheresData[i*3][0] = objects[i]->x0;
-                spheresData[i*3][1] = objects[i]->x1;
-                spheresData[i*3][2] = objects[i]->z0;
-                spheresData[i*3][3] = objects[i]->z1;
-                spheresData[i*3+1][0] = objects[i]->matPtr->color[0];
-                spheresData[i*3+1][1] = objects[i]->matPtr->color[1];
-                spheresData[i*3+1][2] = objects[i]->matPtr->color[2];
-                spheresData[i*3+1][3] = objects[i]->k;
-                spheresData[i*3+2][0] = objects[i]->matPtr->materialType;
-                spheresData[i*3+2][1] = objects[i]->matPtr->roughness;
-                spheresData[i*3+2][2] = objects[i]->matPtr->ior;
+                objectsData[i*3][0] = objects[i]->x0;
+                objectsData[i*3][1] = objects[i]->x1;
+                objectsData[i*3][2] = objects[i]->z0;
+                objectsData[i*3][3] = objects[i]->z1;
+                objectsData[i*3+1][0] = objects[i]->matPtr->color[0];
+                objectsData[i*3+1][1] = objects[i]->matPtr->color[1];
+                objectsData[i*3+1][2] = objects[i]->matPtr->color[2];
+                objectsData[i*3+1][3] = objects[i]->k;
+                objectsData[i*3+2][0] = objects[i]->matPtr->materialType;
+                objectsData[i*3+2][1] = objects[i]->matPtr->roughness;
+                objectsData[i*3+2][2] = objects[i]->matPtr->ior;
             break;
             case OBJ_YZRECT:
-                spheresData[i*3][0] = objects[i]->y0;
-                spheresData[i*3][1] = objects[i]->y1;
-                spheresData[i*3][2] = objects[i]->z0;
-                spheresData[i*3][3] = objects[i]->z1;
-                spheresData[i*3+1][0] = objects[i]->matPtr->color[0];
-                spheresData[i*3+1][1] = objects[i]->matPtr->color[1];
-                spheresData[i*3+1][2] = objects[i]->matPtr->color[2];
-                spheresData[i*3+1][3] = objects[i]->k;
-                spheresData[i*3+2][0] = objects[i]->matPtr->materialType;
-                spheresData[i*3+2][1] = objects[i]->matPtr->roughness;
-                spheresData[i*3+2][2] = objects[i]->matPtr->ior;
+                objectsData[i*3][0] = objects[i]->y0;
+                objectsData[i*3][1] = objects[i]->y1;
+                objectsData[i*3][2] = objects[i]->z0;
+                objectsData[i*3][3] = objects[i]->z1;
+                objectsData[i*3+1][0] = objects[i]->matPtr->color[0];
+                objectsData[i*3+1][1] = objects[i]->matPtr->color[1];
+                objectsData[i*3+1][2] = objects[i]->matPtr->color[2];
+                objectsData[i*3+1][3] = objects[i]->k;
+                objectsData[i*3+2][0] = objects[i]->matPtr->materialType;
+                objectsData[i*3+2][1] = objects[i]->matPtr->roughness;
+                objectsData[i*3+2][2] = objects[i]->matPtr->ior;
             break;
         }
         
@@ -478,14 +558,6 @@ void WriteTrianglesData(Model& m)
             triangleIndex+=2;
         }
     }
-    AABB ab = AABBofModel(m);
-    triangleData[triangleIndex][0] = ab.minimum[0];
-    triangleData[triangleIndex][1] = ab.minimum[1];
-    triangleData[triangleIndex][2] = ab.minimum[2];
-
-    triangleData[triangleIndex+1][0] = ab.maximum[0];
-    triangleData[triangleIndex+1][1] = ab.maximum[1];
-    triangleData[triangleIndex+1][2] = ab.maximum[2];
 }
 
 AABB AABBofModel(Model& m)
